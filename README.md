@@ -1,5 +1,7 @@
 # 💧 WaterPause - 轻量级桌面防久坐与饮水提醒工具
 
+**作者的话**：大家好，这是本人的第一个VibeCoding项目！作为一个技术恐惧人士且非信息类学生，也是第一次用高科技（对我而言Agent确实是高科技了）写了一个很小的项目。如果有人看到了这个小项目，并且发现有不太好用的地方，欢迎提Issue和提供PR！下面是AI帮忙写的项目介绍。
+
 > **WaterPause**: 如水般清澈透明，护你身心健康。
 > 
 > *A featherweight, click-through desktop break & hydration companion that never locks your workflow.*
@@ -37,8 +39,8 @@
 > **电脑里压根不需要安装 Python，开箱即用！**
 
 1. 直接前往本项目的 **[Releases 发布页面](../../releases)**。
-2. 下载单个独立文件：**`防久坐与饮水提醒.exe`**。
-3. 双击直接在后台静默运行！你可以直接把它发送到桌面快捷方式或放入开机自启目录。
+2. 下载单个独立文件：**`WaterPause.exe`**。
+3. 双击直接在后台静默运行！你可以直接把它发送到桌面快捷方式或在设置中开启开机自启。
 
 ---
 
@@ -63,9 +65,10 @@ pythonw main.pyw
 本软件严格遵循现代桌面客户端分层架构规范进行解耦设计：
 
 ```text
-├── main.pyw                 # GUI 无黑框静默主入口
-├── create_desktop_shortcut.py # 自动在桌面生成带专属图标的快捷方式
-├── 一键安装并创建桌面快捷方式.bat # 新人一键环境配置脚本
+├── main.pyw                 # GUI 无黑框静默运行主入口
+├── main.py                  # 应用程序总控制器与生命周期调度
+├── setup.py                 # 纯 Python 跨平台一键安装向导（自动镜像源加速）
+├── create_desktop_shortcut.py # 自动在桌面生成带专属水滴图标的快捷方式
 ├── requirements.txt         # 开源依赖清单 (pywin32, pystray, pillow, keyboard)
 ├── app_icon.ico / png       # 原创设计专属高分辨率小水滴时钟图标
 ├── core/                    # 【核心业务逻辑层】
@@ -76,7 +79,8 @@ pythonw main.pyw
 │   ├── font_manager.py      # 系统 400+ 字体枚举与外部 TTF/OTF 动态加载器
 │   ├── idle_detector.py     # 键鼠空闲时间探测
 │   ├── session_listener.py  # 全屏窗口感知
-│   └── autostart.py         # Windows 注册表开机自启管理
+│   ├── autostart.py         # Windows 注册表开机自启管理
+│   └── hotkey_manager.py    # 全局紧急跳过快捷键监听管理
 └── ui/                      # 【视觉呈现层】
     ├── overlay_window.py    # 双层协同全屏穿透蒙版 (带无损预览)
     ├── settings_dialog.py   # 选项卡现代化偏好设置面板
