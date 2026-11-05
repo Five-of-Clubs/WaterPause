@@ -81,9 +81,17 @@ class BreakOverlayWindow:
         bg_img_path = self.config.get("bg_image_path", "").strip()
         if bg_img_path and os.path.exists(bg_img_path):
             try:
+                from PIL import ImageOps
                 pil_img = Image.open(bg_img_path)
-                pil_img = pil_img.resize((vw, vh), Image.Resampling.LANCZOS)
-                self._bg_photo = ImageTk.PhotoImage(pil_img)
+                # 【等比例居中填充裁剪 (Aspect-Ratio Fill / Cover)】:
+                # 严格保持图片原始宽高比，绝不变形拉伸；将图片等比例放大至完整覆盖整个屏幕，
+                # 并对多余的边缘进行对称居中裁剪（即 CSS 中的 object-fit: cover 效果）。
+                fitted_img = ImageOps.fit(
+                    pil_img, (vw, vh),
+                    method=Image.Resampling.LANCZOS,
+                    centering=(0.5, 0.5)
+                )
+                self._bg_photo = ImageTk.PhotoImage(fitted_img)
                 lbl_img = tk.Label(self.bg_window, image=self._bg_photo, bg=bg_color)
                 lbl_img.place(x=0, y=0, width=vw, height=vh)
             except Exception as e:
