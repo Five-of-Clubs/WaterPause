@@ -44,18 +44,22 @@ def set_autostart(enable: bool, target_script_path: str) -> bool:
     """
     设置或注销开机自启动项
     :param enable: True 为开启自启，False 为关闭
-    :param target_script_path: main.pyw 的绝对路径
+    :param target_script_path: main.pyw 的绝对路径（如果处于 exe 打包态则直接绑定 exe）
     """
     try:
-        # 获取 pythonw.exe 路径（如果当前是 python.exe，自动转换为 pythonw.exe）
-        python_exe = sys.executable
-        python_dir = os.path.dirname(python_exe)
-        pythonw_exe = os.path.join(python_dir, "pythonw.exe")
-        if not os.path.exists(pythonw_exe):
-            pythonw_exe = python_exe
+        if getattr(sys, 'frozen', False):
+            # 打包态直接绑定 .exe 自身
+            command = f'"{sys.executable}"'
+        else:
+            # 获取 pythonw.exe 路径（如果当前是 python.exe，自动转换为 pythonw.exe）
+            python_exe = sys.executable
+            python_dir = os.path.dirname(python_exe)
+            pythonw_exe = os.path.join(python_dir, "pythonw.exe")
+            if not os.path.exists(pythonw_exe):
+                pythonw_exe = python_exe
 
-        abs_script = os.path.abspath(target_script_path)
-        command = f'"{pythonw_exe}" "{abs_script}"'
+            abs_script = os.path.abspath(target_script_path)
+            command = f'"{pythonw_exe}" "{abs_script}"'
 
         with winreg.OpenKey(winreg.HKEY_CURRENT_USER, REG_SUBKEY, 0, winreg.KEY_SET_VALUE) as key:
             if enable:

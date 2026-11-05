@@ -22,8 +22,16 @@ try:
 except Exception:
     pass
 
-# 将项目根目录加入模块搜索路径
-PROJECT_ROOT = os.path.dirname(os.path.abspath(__file__))
+# 将项目根目录加入模块搜索路径，并兼容 PyInstaller 单文件打包 (sys.frozen)
+if getattr(sys, 'frozen', False):
+    # 打包运行态：可执行文件所在目录
+    PROJECT_ROOT = os.path.dirname(sys.executable)
+    BUNDLE_DIR = getattr(sys, '_MEIPASS', PROJECT_ROOT)
+else:
+    # 源码运行态：脚本所在目录
+    PROJECT_ROOT = os.path.dirname(os.path.abspath(__file__))
+    BUNDLE_DIR = PROJECT_ROOT
+
 if PROJECT_ROOT not in sys.path:
     sys.path.insert(0, PROJECT_ROOT)
 
@@ -52,7 +60,9 @@ class BreakReminderApplication:
         self.root.withdraw()
 
         # 绑定应用图标
-        icon_path = os.path.join(PROJECT_ROOT, "app_icon.ico")
+        icon_path = os.path.join(BUNDLE_DIR, "app_icon.ico")
+        if not os.path.exists(icon_path):
+            icon_path = os.path.join(PROJECT_ROOT, "app_icon.ico")
         if os.path.exists(icon_path):
             try:
                 self.root.iconbitmap(icon_path)

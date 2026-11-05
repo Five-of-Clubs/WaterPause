@@ -12,3 +12,8 @@ env/
 .idea/
 .vscode/
 Thumbs.db
+
+# 打包构建缓存
+build/
+dist/
+*.spec

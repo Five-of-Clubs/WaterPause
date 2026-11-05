@@ -50,9 +50,15 @@ class TrayIconManager:
 
     def _load_tray_image(self) -> Image.Image:
         """
-        加载应用专属的高清小水滴与时钟托盘图标
+        加载应用专属的高清小水滴与时钟托盘图标（兼容 PyInstaller 冻结打包）
         """
-        icon_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "app_icon.png")
+        import sys
+        if getattr(sys, 'frozen', False):
+            base_dir = getattr(sys, '_MEIPASS', os.path.dirname(sys.executable))
+        else:
+            base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+            
+        icon_path = os.path.join(base_dir, "app_icon.png")
         if os.path.exists(icon_path):
             try:
                 return Image.open(icon_path)
