@@ -50,8 +50,8 @@ class SettingsDialog:
 
         self.window = tk.Toplevel(self.parent)
         self.window.title("偏好设置 - 轻量级防久坐与饮水提醒")
-        self.window.geometry("640x540")
-        self.window.minsize(580, 480)
+        self.window.geometry("650x580")
+        self.window.minsize(600, 500)
         self.window.attributes("-topmost", True)
 
         # 绑定应用专属图标
@@ -221,17 +221,47 @@ class SettingsDialog:
         tk.Entry(r_colors, textvariable=self.var_timer_color, width=9, font=self.f_base).pack(side=tk.LEFT, padx=5)
         tk.Button(r_colors, text="🎨 选色", command=self._pick_timer_color, bg=self.c_btn, fg=self.c_fg, relief=tk.FLAT).pack(side=tk.LEFT)
 
-        # 3. 字体选择与字号
-        r_fonts = tk.Frame(tab, bg=self.c_card)
-        r_fonts.pack(fill=tk.X, pady=6)
-        tk.Label(r_fonts, text="倒计时字体:", font=self.f_base, fg=self.c_fg, bg=self.c_card).pack(side=tk.LEFT)
+        # 3. 倒计时字体、字号与颜色
+        r_timer = tk.Frame(tab, bg=self.c_card)
+        r_timer.pack(fill=tk.X, pady=5)
+        tk.Label(r_timer, text="倒计时字体:", font=self.f_base, fg=self.c_fg, bg=self.c_card).pack(side=tk.LEFT)
         self.var_timer_font = tk.StringVar(value=self.config.get("timer_font_family", "Segoe UI"))
-        cb_font = ttk.Combobox(r_fonts, textvariable=self.var_timer_font, values=["Segoe UI", "Microsoft YaHei UI", "Consolas", "Arial", "Impact"], width=13, font=self.f_base)
-        cb_font.pack(side=tk.LEFT, padx=5)
+        cb_timer_font = ttk.Combobox(
+            r_timer, textvariable=self.var_timer_font,
+            values=["Segoe UI", "Microsoft YaHei UI", "Consolas", "Arial", "Impact"],
+            width=12, font=self.f_base
+        )
+        cb_timer_font.pack(side=tk.LEFT, padx=5)
 
-        tk.Label(r_fonts, text="字号:", font=self.f_base, fg=self.c_fg, bg=self.c_card).pack(side=tk.LEFT, padx=(10, 0))
+        tk.Label(r_timer, text="字号:", font=self.f_base, fg=self.c_fg, bg=self.c_card).pack(side=tk.LEFT, padx=(5, 0))
         self.var_timer_size = tk.IntVar(value=int(self.config.get("timer_font_size", 68)))
-        tk.Spinbox(r_fonts, from_=36, to=120, textvariable=self.var_timer_size, width=6, font=self.f_base).pack(side=tk.LEFT, padx=5)
+        tk.Spinbox(r_timer, from_=36, to=120, textvariable=self.var_timer_size, width=5, font=self.f_base).pack(side=tk.LEFT, padx=5)
+
+        tk.Label(r_timer, text="颜色:", font=self.f_base, fg=self.c_fg, bg=self.c_card).pack(side=tk.LEFT, padx=(5, 0))
+        self.var_timer_color = tk.StringVar(value=self.config.get("timer_font_color", "#ffffff"))
+        tk.Entry(r_timer, textvariable=self.var_timer_color, width=8, font=self.f_base).pack(side=tk.LEFT, padx=3)
+        tk.Button(r_timer, text="🎨 选色", command=self._pick_timer_color, bg=self.c_btn, fg=self.c_fg, relief=tk.FLAT).pack(side=tk.LEFT)
+
+        # 4. 提示词/语录字体、字号与颜色
+        r_quote = tk.Frame(tab, bg=self.c_card)
+        r_quote.pack(fill=tk.X, pady=5)
+        tk.Label(r_quote, text="提示词字体:", font=self.f_base, fg=self.c_fg, bg=self.c_card).pack(side=tk.LEFT)
+        self.var_quote_font = tk.StringVar(value=self.config.get("quote_font_family", "Microsoft YaHei UI"))
+        cb_quote_font = ttk.Combobox(
+            r_quote, textvariable=self.var_quote_font,
+            values=["Microsoft YaHei UI", "Segoe UI", "楷体", "仿宋", "Arial", "Consolas"],
+            width=12, font=self.f_base
+        )
+        cb_quote_font.pack(side=tk.LEFT, padx=5)
+
+        tk.Label(r_quote, text="字号:", font=self.f_base, fg=self.c_fg, bg=self.c_card).pack(side=tk.LEFT, padx=(5, 0))
+        self.var_quote_size = tk.IntVar(value=int(self.config.get("quote_font_size", 18)))
+        tk.Spinbox(r_quote, from_=12, to=48, textvariable=self.var_quote_size, width=5, font=self.f_base).pack(side=tk.LEFT, padx=5)
+
+        tk.Label(r_quote, text="颜色:", font=self.f_base, fg=self.c_fg, bg=self.c_card).pack(side=tk.LEFT, padx=(5, 0))
+        self.var_quote_color = tk.StringVar(value=self.config.get("quote_font_color", "#cdd6f4"))
+        tk.Entry(r_quote, textvariable=self.var_quote_color, width=8, font=self.f_base).pack(side=tk.LEFT, padx=3)
+        tk.Button(r_quote, text="🎨 选色", command=self._pick_quote_color, bg=self.c_btn, fg=self.c_fg, relief=tk.FLAT).pack(side=tk.LEFT)
 
         # 4. 卡片边框厚度与边框颜色
         r_border = tk.Frame(tab, bg=self.c_card)
@@ -270,6 +300,10 @@ class SettingsDialog:
     def _pick_timer_color(self):
         c = colorchooser.askcolor(initialcolor=self.var_timer_color.get(), title="选择倒计时颜色", parent=self.window)
         if c and c[1]: self.var_timer_color.set(c[1])
+
+    def _pick_quote_color(self):
+        c = colorchooser.askcolor(initialcolor=self.var_quote_color.get(), title="选择提示词颜色", parent=self.window)
+        if c and c[1]: self.var_quote_color.set(c[1])
 
     def _pick_border_color(self):
         c = colorchooser.askcolor(initialcolor=self.var_border_color.get(), title="选择边框颜色", parent=self.window)
@@ -383,6 +417,9 @@ class SettingsDialog:
             self.var_timer_color.set(DEFAULT_CONFIG["timer_font_color"])
             self.var_timer_font.set(DEFAULT_CONFIG["timer_font_family"])
             self.var_timer_size.set(DEFAULT_CONFIG["timer_font_size"])
+            self.var_quote_font.set(DEFAULT_CONFIG["quote_font_family"])
+            self.var_quote_size.set(DEFAULT_CONFIG["quote_font_size"])
+            self.var_quote_color.set(DEFAULT_CONFIG["quote_font_color"])
             self.var_border_width.set(DEFAULT_CONFIG["card_border_width"])
             self.var_border_color.set(DEFAULT_CONFIG["card_border_color"])
             self.var_bg_image.set(DEFAULT_CONFIG["bg_image_path"])
@@ -413,6 +450,9 @@ class SettingsDialog:
             "timer_font_color": self.var_timer_color.get().strip() or "#ffffff",
             "timer_font_family": self.var_timer_font.get().strip() or "Segoe UI",
             "timer_font_size": max(24, self.var_timer_size.get()),
+            "quote_font_family": self.var_quote_font.get().strip() or "Microsoft YaHei UI",
+            "quote_font_size": max(12, self.var_quote_size.get()),
+            "quote_font_color": self.var_quote_color.get().strip() or "#cdd6f4",
             "card_border_width": max(0, self.var_border_width.get()),
             "card_border_color": self.var_border_color.get().strip() or "#89b4fa",
             "bg_image_path": self.var_bg_image.get().strip(),
