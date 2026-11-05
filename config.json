@@ -1,0 +1,19 @@
+{
+    "work_duration_minutes": 45,
+    "break_duration_minutes": 3,
+    "pre_break_seconds": 30,
+    "overlay_opacity": 0.35,
+    "overlay_bg_color": "#181825",
+    "overlay_text_color": "#cdd6f4",
+    "overlay_quote_color": "#bac2de",
+    "emergency_hotkey": "ctrl+shift+space",
+    "idle_threshold_minutes": 5,
+    "fullscreen_delay_enabled": true,
+    "quotes": [
+        "站起来活动一下，去喝杯温水，保护好你的专注力与身体状态。",
+        "望向窗外远眺 20 秒，让睫状肌彻底放松一下吧。",
+        "转动颈椎，伸个懒腰，喝口水，深呼吸。",
+        "水是思维的润滑剂，倒杯温水，稍微活动下腰椎与双腿。",
+        "久坐伤身，给疲倦的肌肉两分钟舒展时间。"
+    ]
+}
