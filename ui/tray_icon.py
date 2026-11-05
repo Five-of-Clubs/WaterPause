@@ -3,9 +3,16 @@
 模块名称: ui/tray_icon.py
 作    者: VibeCoder
 创建时间: 2026-11-05
-更新说明:
-    1. 【加载高清专属图标】: 优先加载 assets/app_icon.png，提供与任务栏一致的品牌视觉。
-    2. 【线程安全菜单回调】: 依然严格使用 root.after(0, ...) 将菜单点击事件投递至主线程。
+模块描述:
+    本模块实现 Windows 系统托盘区图标常驻与交互菜单。
+    
+设计原则:
+    1. 【极低资源占用】: 
+       使用 pystray (纯 Win32 原生 Shell_NotifyIcon 封装) + 自定义专属高清图标，
+       无需常驻庞大的图形引擎。
+    2. 【线程安全交互 (Thread-Safe Dispatch)】:
+       托盘菜单点击事件在独立线程触发，通过 root.after(0, ...) 调度到 Tkinter 主线程执行，
+       严格遵循现代 GUI 开发的线程隔离范式。
 ==============================================================================
 """
 
@@ -16,20 +23,6 @@ from typing import Callable, Optional
 from PIL import Image
 import pystray
 from pystray import MenuItem as item, Menu
-
-
-def load_app_tray_icon() -> Image.Image:
-    """
-    加载应用专属托盘图标，若文件缺失则在内存中绘制备用图标
-    """
-    icon_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "assets", "app_icon.png"))
-    if os.path.exists(icon_path):
-        try:
-            return Image.open(icon_path)
-        except Exception:
-            pass
-    # 备用方案
-    return Image.new("RGBA", (64, 64), (137, 180, 250, 255))
 
 
 class TrayIconManager:
@@ -55,11 +48,24 @@ class TrayIconManager:
         self._icon: Optional[pystray.Icon] = None
         self._is_running = False
 
+    def _load_tray_image(self) -> Image.Image:
+        """
+        加载应用专属的高清小水滴与时钟托盘图标
+        """
+        icon_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "app_icon.png")
+        if os.path.exists(icon_path):
+            try:
+                return Image.open(icon_path)
+            except Exception:
+                pass
+        # 降级备用
+        return Image.new("RGBA", (64, 64), (137, 180, 250, 255))
+
     def start(self):
         """
-        在后台守护线程中启动托盘图标
+        在后台启动托盘图标（异步守护运行）
         """
-        image = load_app_tray_icon()
+        image = self._load_tray_image()
         
         # 构建右键上下文菜单
         menu = Menu(
@@ -80,7 +86,7 @@ class TrayIconManager:
         self._icon = pystray.Icon(
             name="BreakReminder",
             icon=image,
-            title="防久坐与饮水提醒 | 静默运行中",
+            title="防久坐与饮水提醒 | 正在后台静默守护中...",
             menu=menu
         )
 
@@ -89,14 +95,14 @@ class TrayIconManager:
 
     def update_tooltip(self, text: str):
         """
-        更新鼠标悬停提示
+        更新鼠标悬停在托盘图标时的气泡提示文案
         """
         if self._icon and self._is_running:
             self._icon.title = f"防久坐与饮水提醒\n{text}"
 
     def stop(self):
         """
-        退出托盘
+        退出并注销托盘图标
         """
         self._is_running = False
         if self._icon:
@@ -105,7 +111,7 @@ class TrayIconManager:
 
     def _wrap(self, action: Callable[[], None]):
         """
-        将托盘菜单的异步操作派发给 Tkinter 主线程
+        【线程安全包装器】：将后台线程的菜单点击事件转发回 Tkinter 主线程执行
         """
         def handler(icon, item):
             self.root.after(0, action)

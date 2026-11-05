@@ -6,8 +6,12 @@
     "overlay_bg_color": "#2c001e",
     "overlay_text_color": "#cdd6f4",
     "overlay_quote_color": "#bac2de",
+    "bg_image_path": "",
+    "font_family": "Microsoft YaHei UI",
+    "time_font_size": 76,
+    "quote_font_size": 22,
     "emergency_hotkey": "ctrl+shift+space",
-    "idle_threshold_minutes": 5,
+    "idle_threshold_minutes": 20,
     "fullscreen_delay_enabled": true,
     "quotes": [
         "站起来活动一下，去喝杯温水，保护好你的专注力与身体状态。",

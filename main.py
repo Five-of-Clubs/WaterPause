@@ -3,16 +3,8 @@
 模块名称: main.py (主应用程序入口)
 作    者: VibeCoder
 创建时间: 2026-11-05
-更新说明:
-    1. 【自动隐藏黑色控制台窗口】:
-       当常规启动时，利用 Windows API (ShowWindow SW_HIDE) 瞬间静默隐藏控制台，
-       彻底解决用户反馈的“黑框关不掉，一关主程序就退”的痛点。
-       同时支持传入 --console 参数便于开发者调试打印。
-    2. 【重设 Windows 任务栏 AppUserModelID】:
-       调用 shell32.SetCurrentProcessExplicitAppUserModelID 剥离 Python 默认进程标识，
-       让任务栏展示我们的专属应用图标，彻底告别 Python 蓝黄蛇形图标。
-    3. 【双图层半透明穿透蒙版调度】:
-       适配新的 BreakOverlayWindow，实现蒙版半透明但倒计时文字 100% 不透明鲜亮。
+项目描述:
+    轻量级桌面防久坐与饮水提醒工具 (Break & Hydration Reminder)
 ==============================================================================
 """
 
@@ -22,43 +14,18 @@ import ctypes
 import tkinter as tk
 from typing import Optional
 
-# ---------------------------------------------------------------------------
-# 1. 彻底解决“弹出黑色 Python 对话框”的痛点
-# ---------------------------------------------------------------------------
-def hide_console_window_if_present():
-    """
-    【静默运行】：若以普通 python.exe 启动，Windows 会分配控制台窗口。
-    此处调用 Windows 原生 API 将控制台窗口置入后台隐藏模式 (SW_HIDE)。
-    若需要查看调试日志，可在命令行追加 --console 参数启动。
-    """
-    if "--console" not in sys.argv and "--debug" not in sys.argv:
-        try:
-            hwnd = ctypes.windll.kernel32.GetConsoleWindow()
-            if hwnd:
-                # 0 代表 SW_HIDE (隐藏窗口)
-                ctypes.windll.user32.ShowWindow(hwnd, 0)
-        except Exception:
-            pass
+# 核心 Windows 技巧：设置独立 AppUserModelID
+# 告诉 Windows 任务栏这是一个独立应用程序，不要套用 Python 默认的小蟒蛇图标！
+try:
+    myappid = "antigravity.breakreminder.water.1.0"
+    ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID(myappid)
+except Exception:
+    pass
 
-# 立即执行控制台隐藏
-hide_console_window_if_present()
-
-# ---------------------------------------------------------------------------
-# 2. 彻底解决“任务栏显示 Python 默认蓝黄蛇图标”的痛点
-# ---------------------------------------------------------------------------
-def set_app_user_model_id():
-    """
-    【独立应用标识】：告诉 Windows 任务栏“我是独立的防久坐提醒软件，不要把我归类为 Python 解释器”，
-    使得任务栏展示属于我们自己的高清图标。
-    """
-    try:
-        myappid = "vibecoding.breakreminder.desktop.1.0"
-        ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID(myappid)
-    except Exception:
-        pass
-
-set_app_user_model_id()
-
+# 将项目根目录加入模块搜索路径
+PROJECT_ROOT = os.path.dirname(os.path.abspath(__file__))
+if PROJECT_ROOT not in sys.path:
+    sys.path.insert(0, PROJECT_ROOT)
 
 from core.config_manager import ConfigManager
 from core.state_machine import BreakStateMachine, AppStatus
@@ -72,18 +39,19 @@ from ui.tray_icon import TrayIconManager
 
 class BreakReminderApplication:
     """
-    应用程序总控制器
+    应用程序总控制器 (Application Coordinator)
+    负责装配依赖、连接各层接口并驱动主事件循环
     """
     def __init__(self):
-        # 1. 启动高 DPI 自适应感知
+        # 1. 启动高 DPI 自适应感知，保障所有显示器画面清晰
         enable_dpi_awareness()
 
-        # 2. 创建 Tkinter 根窗口（隐形后台根容器）
+        # 2. 创建 Tkinter 根窗口（隐藏根窗口，静默运行于托盘区）
         self.root = tk.Tk()
         self.root.withdraw()
 
-        # 设置应用程序图标（任务栏与子窗口通用）
-        icon_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "assets", "app_icon.ico"))
+        # 绑定应用图标
+        icon_path = os.path.join(PROJECT_ROOT, "app_icon.ico")
         if os.path.exists(icon_path):
             try:
                 self.root.iconbitmap(icon_path)
@@ -91,21 +59,22 @@ class BreakReminderApplication:
                 pass
 
         # 3. 初始化配置管理器
-        self.config = ConfigManager(os.path.abspath(os.path.join(os.path.dirname(__file__), "config.json")))
+        config_path = os.path.join(PROJECT_ROOT, "config.json")
+        self.config = ConfigManager(config_path)
 
         # 4. 初始化核心业务状态机
         self.state_machine = BreakStateMachine(self.config)
 
-        # 5. 初始化全局快捷键
+        # 5. 初始化全局快捷键管理器
         self.hotkey_manager = HotkeyManager()
         self._bind_hotkey()
 
-        # 6. 初始化 UI 视图组件（包含双图层蒙版、预告卡片、全新选项卡设置面板）
+        # 6. 初始化 UI 视图组件
         self.overlay = BreakOverlayWindow(self.root, self.config)
         self.toast = PreBreakToast(self.root)
         self.settings_dialog = SettingsDialog(self.root, self.config)
 
-        # 7. 初始化系统托盘图标
+        # 7. 初始化系统托盘图标管理器
         self.tray = TrayIconManager(
             root=self.root,
             on_trigger_break=self.state_machine.trigger_break_now,
@@ -115,25 +84,37 @@ class BreakReminderApplication:
             on_exit=self.exit_app
         )
 
-        # 8. 建立事件总线连接
+        # 8. 建立核心层与 UI 层的事件回调管道
         self.state_machine.on_state_change = self._handle_state_change
         self.state_machine.on_tick = self._handle_tick
         self.config.add_listener(self._handle_config_changed)
 
-        # 9. 启动定时心跳
+        # 9. 启动每秒一次的事件脉冲定时器
         self._schedule_tick()
 
     def _bind_hotkey(self):
+        """
+        根据当前配置注册全局跳过快捷键
+        """
         hotkey_str = self.config.get("emergency_hotkey", "ctrl+shift+space")
         self.hotkey_manager.register(hotkey_str, self._on_hotkey_pressed)
 
     def _on_hotkey_pressed(self):
+        """
+        当用户按下紧急跳过快捷键时触发（线程安全分发给主线程）
+        """
         self.root.after(0, self.state_machine.skip_break)
 
     def _handle_config_changed(self, new_config):
+        """
+        配置热重载
+        """
         self._bind_hotkey()
 
     def _handle_state_change(self, old_state: AppStatus, new_state: AppStatus):
+        """
+        【状态机响应路由】：当状态发生跃迁时，协调不同窗口的显隐
+        """
         if new_state == AppStatus.WORKING:
             self.overlay.hide()
             self.toast.hide()
@@ -151,6 +132,9 @@ class BreakReminderApplication:
             self.toast.hide()
 
     def _handle_tick(self, remaining_seconds: int, state: AppStatus):
+        """
+        【每秒心跳刷新】：更新托盘气泡与正在显示的窗口倒计时
+        """
         mins = remaining_seconds // 60
         secs = remaining_seconds % 60
         time_str = f"{mins:02d}:{secs:02d}"
@@ -167,14 +151,23 @@ class BreakReminderApplication:
             self.tray.update_tooltip("计时器已暂停")
 
     def _schedule_tick(self):
+        """
+        驱动状态机心跳：精准每秒一次事件驱动
+        """
         self.state_machine.tick()
         self.root.after(1000, self._schedule_tick)
 
     def run(self):
+        """
+        启动应用
+        """
         self.tray.start()
         self.root.mainloop()
 
     def exit_app(self):
+        """
+        安全释放所有系统资源并彻底退出
+        """
         self.hotkey_manager.unregister()
         self.overlay.hide()
         self.toast.hide()
