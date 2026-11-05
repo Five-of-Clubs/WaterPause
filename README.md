@@ -1,5 +1,9 @@
-# 💧 轻量级桌面防久坐与饮水提醒工具 (Break & Hydration Reminder)
+# 💧 WaterPause - 轻量级桌面防久坐与饮水提醒工具
 
+> **WaterPause**: 如水般清澈透明，护你身心健康。
+> 
+> *A featherweight, click-through desktop break & hydration companion that never locks your workflow.*
+> 
 > **设计哲学**：“强视觉提醒，零操作阻断” —— 通过全屏半透明穿透蒙版打破盯屏惯性，但鼠标 100% 穿透操作，绝不抢焦点、绝不锁死电脑！
 
 ---

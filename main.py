@@ -17,7 +17,7 @@ from typing import Optional
 # 核心 Windows 技巧：设置独立 AppUserModelID
 # 告诉 Windows 任务栏这是一个独立应用程序，不要套用 Python 默认的小蟒蛇图标！
 try:
-    myappid = "antigravity.breakreminder.water.1.0"
+    myappid = "antigravity.waterpause.app.1.0"
     ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID(myappid)
 except Exception:
     pass
