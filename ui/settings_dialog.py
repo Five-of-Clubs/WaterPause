@@ -24,7 +24,7 @@
 import os
 import tkinter as tk
 from tkinter import ttk, colorchooser, filedialog, messagebox
-from typing import Optional, List
+from typing import Optional, List, Callable
 
 from core.config_manager import ConfigManager, DEFAULT_CONFIG
 from os_layer.autostart import is_autostart_enabled, set_autostart
@@ -35,9 +35,15 @@ class SettingsDialog:
     """
     偏好设置现代化配置面板
     """
-    def __init__(self, parent: tk.Tk, config_manager: ConfigManager):
+    def __init__(
+        self,
+        parent: tk.Tk,
+        config_manager: ConfigManager,
+        on_preview: Optional[Callable[[dict], None]] = None
+    ):
         self.parent = parent
         self.config = config_manager
+        self.on_preview = on_preview
         self.window: Optional[tk.Toplevel] = None
         self.system_fonts = get_available_fonts()
 
@@ -124,12 +130,20 @@ class SettingsDialog:
         dock = tk.Frame(parent, bg=self.c_bg, padx=16, pady=12)
         dock.pack(side=tk.BOTTOM, fill=tk.X)
 
+        # 右侧操作组：保存 / 预览 / 取消
         btn_save = tk.Button(
             dock, text="💾 保存并应用", command=self._save_and_apply,
             bg=self.c_accent, fg="#11111b", font=self.f_bold,
-            relief=tk.FLAT, padx=18, pady=6, cursor="hand2"
+            relief=tk.FLAT, padx=16, pady=6, cursor="hand2"
         )
         btn_save.pack(side=tk.RIGHT, padx=(8, 0))
+
+        btn_preview = tk.Button(
+            dock, text="👁 预览效果", command=self._trigger_preview,
+            bg="#fab387", fg="#11111b", font=self.f_bold,
+            relief=tk.FLAT, padx=14, pady=6, cursor="hand2"
+        )
+        btn_preview.pack(side=tk.RIGHT, padx=(8, 0))
 
         btn_cancel = tk.Button(
             dock, text="取消", command=self.window.destroy,
@@ -138,12 +152,56 @@ class SettingsDialog:
         )
         btn_cancel.pack(side=tk.RIGHT)
 
+        # 左侧：恢复默认值
         btn_reset = tk.Button(
             dock, text="恢复默认设置", command=self._reset_defaults,
             bg=self.c_btn, fg="#f38ba8", font=self.f_sub,
             relief=tk.FLAT, padx=10, pady=6, cursor="hand2"
         )
         btn_reset.pack(side=tk.LEFT)
+
+    def _collect_current_ui_settings(self) -> dict:
+        """
+        收集当前界面上用户正在编辑的所有草稿参数（即使尚未点击保存）
+        """
+        quotes = list(self.quotes_listbox.get(0, tk.END)) if hasattr(self, 'quotes_listbox') else []
+        return {
+            "work_duration_minutes": max(1, self.var_work_min.get()),
+            "break_duration_minutes": max(1, self.var_break_min.get()),
+            "pre_break_seconds": max(5, self.var_pre_sec.get()),
+            "overlay_opacity": round(self.var_bg_opacity.get() / 100.0, 2),
+            "text_opacity": round(self.var_text_opacity.get() / 100.0, 2),
+            "overlay_bg_color": self.var_bg_color.get().strip() or "#181825",
+            
+            "timer_font_family": self.var_timer_font.get().strip() or "Segoe UI",
+            "timer_font_size": max(24, self.var_timer_size.get()),
+            "timer_font_color": self.var_timer_color.get().strip() or "#ffffff",
+            "timer_font_bold": self.var_timer_bold.get(),
+            
+            "quote_font_family": self.var_quote_font.get().strip() or "Microsoft YaHei UI",
+            "quote_font_size": max(10, self.var_quote_size.get()),
+            "quote_font_color": self.var_quote_color.get().strip() or "#cdd6f4",
+            "quote_font_bold": self.var_quote_bold.get(),
+            "custom_font_path": self.var_custom_font.get().strip(),
+
+            "card_border_width": max(0, self.var_border_width.get()),
+            "card_border_color": self.var_border_color.get().strip() or "#89b4fa",
+            "bg_image_path": self.var_bg_image.get().strip(),
+            "emergency_hotkey": self.var_hotkey.get().strip().lower() or "ctrl+shift+space",
+            "idle_threshold_minutes": max(0, self.var_idle.get()),
+            "fullscreen_delay_enabled": self.var_fs.get(),
+            "settings_font_scale": self.var_font_scale.get(),
+            "autostart": self.var_autostart.get(),
+            "quotes": quotes or ["预览模式：这是一条示例关怀文案。"]
+        }
+
+    def _trigger_preview(self):
+        """
+        触发无损预览，不打乱真实状态机工作倒计时
+        """
+        draft_settings = self._collect_current_ui_settings()
+        if self.on_preview:
+            self.on_preview(draft_settings)
 
     def _build_tab_time(self, tab: tk.Frame):
         """

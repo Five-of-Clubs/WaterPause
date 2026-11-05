@@ -78,7 +78,11 @@ class BreakReminderApplication:
         # 6. 初始化 UI 视图组件
         self.overlay = BreakOverlayWindow(self.root, self.config)
         self.toast = PreBreakToast(self.root)
-        self.settings_dialog = SettingsDialog(self.root, self.config)
+        self.settings_dialog = SettingsDialog(
+            parent=self.root,
+            config_manager=self.config,
+            on_preview=self._handle_preview
+        )
 
         # 7. 初始化系统托盘图标管理器
         self.tray = TrayIconManager(
@@ -116,6 +120,12 @@ class BreakReminderApplication:
         配置热重载
         """
         self._bind_hotkey()
+
+    def _handle_preview(self, preview_config: dict):
+        """
+        处理设置面板的实时无损预览请求（不打断后台真实计时器）
+        """
+        self.overlay.show(override_config=preview_config, is_preview=True)
 
     def _handle_state_change(self, old_state: AppStatus, new_state: AppStatus):
         """

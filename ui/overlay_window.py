@@ -8,7 +8,7 @@
     
 双层协同架构原理 (Two-Layer Coordinated Overlay):
     1. 【底层背景幕布 (Backdrop Layer)】:
-       - 负责全屏暗色遮罩或用户自定义背景图。
+       - 负责全屏暗色遮罩或用户自定义背景图（保持原图比例居中填充裁剪 Cover/Fill）。
        - 独立绑定 overlay_opacity (例如 35%)，不影响前景文字。
        - 注入 WS_EX_TRANSPARENT 鼠标穿透样式。
     2. 【顶层文字视显 (HUD Foreground Layer)】:
@@ -16,14 +16,18 @@
        - 倒计时大字与关怀语录保持 100% 纯正不透明（或通过 text_opacity 自定义）。
        - 彻底解决“蒙版透明度调低后文字发虚看不清”的痛点！
        - 同样注入 WS_EX_TRANSPARENT 鼠标完全穿透。
+    3. 【无损预览模式 (Preview Mode)】:
+       - 支持传入草稿配置实时预览，不扰动后台正式专注工作倒计时。
+       - 按 ESC、快捷键或 8 秒后自动安全退出预览。
 ==============================================================================
 """
 
 import os
 import random
 import tkinter as tk
-from typing import Optional
-from PIL import Image, ImageTk
+from typing import Optional, Dict, Any
+from PIL import Image, ImageTk, ImageOps
+import keyboard
 
 from core.config_manager import ConfigManager
 from os_layer.win_api import enable_dpi_awareness, get_virtual_screen_geometry, make_window_click_through
@@ -51,16 +55,29 @@ class BreakOverlayWindow:
         
         # 缓存背景图 PhotoImage，避免被 Python 垃圾回收
         self._bg_photo: Optional[ImageTk.PhotoImage] = None
+        
+        # 预览模式状态
+        self.is_preview_mode = False
+        self._preview_timer_id: Optional[str] = None
 
-    def show(self):
+    def show(self, override_config: Optional[Dict[str, Any]] = None, is_preview: bool = False):
         """
         创建并展示双层协同蒙版
+        :param override_config: 临时覆盖配置（用于预览草稿效果）
+        :param is_preview: 是否为免打扰预览模式
         """
         if self.bg_window is not None or self.fg_window is not None:
-            return  # 避免重复创建
+            self.hide()  # 如果已有旧窗口，先安全关闭再展示新配置
 
         enable_dpi_awareness()
         vx, vy, vw, vh = get_virtual_screen_geometry()
+        self.is_preview_mode = is_preview
+
+        # 统一配置获取工具函数
+        def get_val(key: str, default: Any = None) -> Any:
+            if override_config is not None and key in override_config:
+                return override_config[key]
+            return self.config.get(key, default)
 
         # ==========================================
         # 1. 构建底层背景幕布 (Backdrop Window)
@@ -71,22 +88,19 @@ class BreakOverlayWindow:
         self.bg_window.attributes("-topmost", True)
         
         # 读取背景不透明度 (默认 0.35)
-        bg_opacity = float(self.config.get("overlay_opacity", 0.35))
+        bg_opacity = float(get_val("overlay_opacity", 0.35))
         self.bg_window.attributes("-alpha", bg_opacity)
         self.bg_window.geometry(f"{vw}x{vh}+{vx}+{vy}")
 
-        bg_color = self.config.get("overlay_bg_color", "#181825")
+        bg_color = get_val("overlay_bg_color", "#181825")
         self.bg_window.configure(bg=bg_color)
 
         # 检查是否配置了自定义背景图
-        bg_img_path = self.config.get("bg_image_path", "").strip()
+        bg_img_path = str(get_val("bg_image_path", "")).strip()
         if bg_img_path and os.path.exists(bg_img_path):
             try:
-                from PIL import ImageOps
                 pil_img = Image.open(bg_img_path)
-                # 【等比例居中填充裁剪 (Aspect-Ratio Fill / Cover)】:
-                # 严格保持图片原始宽高比，绝不变形拉伸；将图片等比例放大至完整覆盖整个屏幕，
-                # 并对多余的边缘进行对称居中裁剪（即 CSS 中的 object-fit: cover 效果）。
+                # 等比例居中填充裁剪 (Cover/Fill)，保证任何比例图片绝不变形
                 fitted_img = ImageOps.fit(
                     pil_img, (vw, vh),
                     method=Image.Resampling.LANCZOS,
@@ -114,20 +128,19 @@ class BreakOverlayWindow:
         self.fg_window.overrideredirect(True)
         self.fg_window.attributes("-topmost", True)
         
-        # 读取文字层独立不透明度 (默认 1.0，即 100% 纯正清晰)
-        text_alpha = float(self.config.get("text_opacity", 1.0))
+        # 读取文字层独立不透明度 (默认 1.0)
+        text_alpha = float(get_val("text_opacity", 1.0))
         self.fg_window.attributes("-alpha", text_alpha)
         
-        # 开启色键剔除：窗口中所有 CHROMA_KEY 颜色的像素都会变成绝对透明
         self.fg_window.configure(bg=CHROMA_KEY)
         self.fg_window.attributes("-transparentcolor", CHROMA_KEY)
         self.fg_window.geometry(f"{vw}x{vh}+{vx}+{vy}")
 
         # 构建居中内容卡片容器
-        card_bg = self.config.get("card_bg_color", "").strip()
+        card_bg = str(get_val("card_bg_color", "")).strip()
         actual_card_bg = card_bg if card_bg else CHROMA_KEY
-        border_width = int(self.config.get("card_border_width", 0))
-        border_color = self.config.get("card_border_color", "#89b4fa")
+        border_width = int(get_val("card_border_width", 0))
+        border_color = str(get_val("card_border_color", "#89b4fa"))
 
         container = tk.Frame(
             self.fg_window,
@@ -140,19 +153,20 @@ class BreakOverlayWindow:
         container.place(relx=0.5, rely=0.45, anchor="center")
 
         # 2.1 倒计时大字（支持字体、字号、颜色、粗细自定义）
-        custom_font = self.config.get("custom_font_path", "").strip()
+        custom_font = str(get_val("custom_font_path", "")).strip()
         if custom_font and os.path.exists(custom_font):
             load_font_resource(custom_font)
 
-        t_font = self.config.get("timer_font_family", "Segoe UI")
-        t_size = int(self.config.get("timer_font_size", 68))
-        t_color = self.config.get("timer_font_color", "#ffffff")
-        t_bold = bool(self.config.get("timer_font_bold", True))
+        t_font = str(get_val("timer_font_family", "Segoe UI"))
+        t_size = int(get_val("timer_font_size", 68))
+        t_color = str(get_val("timer_font_color", "#ffffff"))
+        t_bold = bool(get_val("timer_font_bold", True))
         t_weight = "bold" if t_bold else "normal"
 
+        initial_time = "03:00" if is_preview else "00:00"
         self.time_label = tk.Label(
             container,
-            text="00:00",
+            text=initial_time,
             font=(t_font, t_size, t_weight),
             fg=t_color,
             bg=actual_card_bg
@@ -160,13 +174,13 @@ class BreakOverlayWindow:
         self.time_label.pack(pady=(0, 15))
 
         # 2.2 关怀提醒语录（支持字体、字号、颜色、粗细自定义）
-        q_font = self.config.get("quote_font_family", "Microsoft YaHei UI")
-        q_size = int(self.config.get("quote_font_size", 18))
-        q_color = self.config.get("quote_font_color", "#cdd6f4")
-        q_bold = bool(self.config.get("quote_font_bold", False))
+        q_font = str(get_val("quote_font_family", "Microsoft YaHei UI"))
+        q_size = int(get_val("quote_font_size", 18))
+        q_color = str(get_val("quote_font_color", "#cdd6f4"))
+        q_bold = bool(get_val("quote_font_bold", False))
         q_weight = "bold" if q_bold else "normal"
 
-        quotes = self.config.get("quotes", ["站起来活动一下，喝杯温水吧。"])
+        quotes = get_val("quotes", ["站起来活动一下，喝杯温水吧。"])
         current_quote = random.choice(quotes) if quotes else "去喝杯水，放松一下吧。"
 
         self.quote_label = tk.Label(
@@ -178,11 +192,16 @@ class BreakOverlayWindow:
         )
         self.quote_label.pack(pady=(0, 20))
 
-        # 2.3 快捷键跳过提示
-        hotkey = self.config.get("emergency_hotkey", "ctrl+shift+space").upper()
+        # 2.3 底部提示文案
+        hotkey = str(get_val("emergency_hotkey", "ctrl+shift+space")).upper()
+        if is_preview:
+            tip_text = f"[ 👁 效果实时预览中 (8秒后自动退出) | 按 ESC 或 快捷键({hotkey}) 立即返回设置，不打乱正常计时 ]"
+        else:
+            tip_text = f"[ 鼠标操作已完全穿透，可正常操作下方软件 | 紧急跳过请按快捷键：{hotkey} ]"
+
         self.tip_label = tk.Label(
             container,
-            text=f"[ 鼠标操作已完全穿透，可正常操作下方软件 | 紧急跳过请按快捷键：{hotkey} ]",
+            text=tip_text,
             font=("Microsoft YaHei UI", 11),
             fg="#a6adc8",
             bg=actual_card_bg
@@ -197,6 +216,15 @@ class BreakOverlayWindow:
         except Exception as e:
             print(f"[BreakOverlayWindow] 注入前景层穿透失败: {e}")
 
+        # 预览模式下的退出监听与自动退出定时器
+        if is_preview:
+            try:
+                keyboard.add_hotkey("esc", self.hide)
+            except Exception:
+                pass
+            # 8 秒后自动关闭预览
+            self._preview_timer_id = self.root.after(8000, self.hide)
+
     def update_countdown(self, remaining_seconds: int):
         """
         实时更新蒙版上的倒计时
@@ -208,8 +236,21 @@ class BreakOverlayWindow:
 
     def hide(self):
         """
-        同时隐藏/销毁双层蒙版窗口
+        隐藏/销毁双层蒙版窗口
         """
+        if self.is_preview_mode:
+            try:
+                keyboard.remove_hotkey("esc")
+            except Exception:
+                pass
+            if self._preview_timer_id:
+                try:
+                    self.root.after_cancel(self._preview_timer_id)
+                except Exception:
+                    pass
+                self._preview_timer_id = None
+            self.is_preview_mode = False
+
         if self.fg_window is not None:
             try:
                 self.fg_window.destroy()
