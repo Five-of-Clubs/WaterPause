@@ -29,17 +29,23 @@ DEFAULT_CONFIG: Dict[str, Any] = {
     # 2. 蒙版视觉样式配置（支持用户自由调节）
     "overlay_opacity": 0.35,            # 蒙版不透明度（0.1 ~ 0.9，默认 35%）
     "overlay_bg_color": "#181825",      # 蒙版暗色背景色（优雅深灰蓝）
-    "overlay_text_color": "#cdd6f4",    # 倒计时大字颜色（柔和暖白灰）
-    "overlay_quote_color": "#bac2de",   # 语录文字颜色（次级白）
+    "overlay_text_color": "#ffffff",    # 倒计时大字颜色（纯白，100% 不透明高亮）
+    "overlay_quote_color": "#f5e0dc",   # 语录文字颜色（柔和暖亮色，100% 不透明）
+    "bg_image_path": "",                # 自定义背景图路径（留空则使用纯色背景）
     
-    # 3. 交互与快捷键
+    # 3. 字体与排版
+    "font_family": "Microsoft YaHei UI", # 字体族（微软雅黑 / Segoe UI 等）
+    "time_font_size": 76,               # 倒计时字号
+    "quote_font_size": 22,              # 关怀语录字号
+    
+    # 4. 交互与快捷键
     "emergency_hotkey": "ctrl+shift+space",  # 紧急跳过蒙版全局快捷键
     
-    # 4. 智能感知策略
+    # 5. 智能感知策略
     "idle_threshold_minutes": 5,        # 键鼠无操作超过此阈值，自动判定为人已离开并归位计时（分钟）
     "fullscreen_delay_enabled": True,   # 当检测到全屏应用（如全屏游戏/看视频）时，顺延蒙版
     
-    # 5. 自定义提醒语录库（支持增删改）
+    # 6. 自定义提醒语录库（支持增删改）
     "quotes": [
         "站起来活动一下，去喝杯温水，保护好你的专注力与身体状态。",
         "望向窗外远眺 20 秒，让睫状肌彻底放松一下吧。",
