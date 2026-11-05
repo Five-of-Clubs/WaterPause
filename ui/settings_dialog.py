@@ -13,11 +13,11 @@
     2. 【现代化分页选项卡 (ttk.Notebook)】:
        将设置清晰划分为 4 大分类：
        - ⏱ 时间节奏: 工作/休息/预告时长
-       - 🎨 视觉与外观: 背景不透明度、文字不透明度（解绑）、字体/字号、边框、自定义背景图
+       - 🎨 视觉与外观: 背景不透明度、文字不透明度、倒计时与语录字体/字号/粗细/选色、导入外部字体、背景图
        - 📝 关怀语录库: 列表增删
        - ⚙ 系统与高级: 开机自启、快捷键、闲置归位、全屏顺延、UI字号缩放
-    3. 【Windows 原生应用图标绑定】:
-       绑定专属 app_icon.ico，告别 Python 默认托盘与任务栏图标。
+    3. 【Windows 原生应用图标绑定与全部系统字体枚举】:
+       支持系统内 500+ 款字体自由挑选，并支持一键导入任意本地 .ttf / .otf 字体文件。
 ==============================================================================
 """
 
@@ -28,6 +28,7 @@ from typing import Optional, List
 
 from core.config_manager import ConfigManager, DEFAULT_CONFIG
 from os_layer.autostart import is_autostart_enabled, set_autostart
+from os_layer.font_manager import get_available_fonts, load_font_resource, get_font_family_from_file
 
 
 class SettingsDialog:
@@ -38,6 +39,7 @@ class SettingsDialog:
         self.parent = parent
         self.config = config_manager
         self.window: Optional[tk.Toplevel] = None
+        self.system_fonts = get_available_fonts()
 
     def show(self):
         """
@@ -50,8 +52,8 @@ class SettingsDialog:
 
         self.window = tk.Toplevel(self.parent)
         self.window.title("偏好设置 - 轻量级防久坐与饮水提醒")
-        self.window.geometry("650x580")
-        self.window.minsize(600, 500)
+        self.window.geometry("680x600")
+        self.window.minsize(620, 520)
         self.window.attributes("-topmost", True)
 
         # 绑定应用专属图标
@@ -79,15 +81,10 @@ class SettingsDialog:
 
         self.window.configure(bg=self.c_bg)
 
-        # ========================================================
-        # 核心修复 1: 必须先 pack 底部的按钮栏！
-        # 这样无论窗口如何缩放，保存/取消/重置按钮永远牢牢钉在底部！
-        # ========================================================
+        # 1. 优先固定底部操作栏（永不被遮挡）
         self._build_bottom_dock(self.window)
 
-        # ========================================================
-        # 核心修复 2: 使用选项卡 Notebook 替换冗长单页，分类规整
-        # ========================================================
+        # 2. 选项卡主体
         style = ttk.Style(self.window)
         style.theme_use("clam")
         style.configure("TNotebook", background=self.c_bg, borderwidth=0)
@@ -105,9 +102,9 @@ class SettingsDialog:
         self.notebook.add(tab_time, text=" ⏱ 时间节奏 ")
         self._build_tab_time(tab_time)
 
-        # Tab 2: 视觉外观（背景与文字透明度解绑、字体字号、边框与图片）
-        tab_visual = tk.Frame(self.notebook, bg=self.c_card, padx=16, pady=16)
-        self.notebook.add(tab_visual, text=" 🎨 视觉与外观 ")
+        # Tab 2: 视觉外观与字体排版
+        tab_visual = tk.Frame(self.notebook, bg=self.c_card, padx=16, pady=14)
+        self.notebook.add(tab_visual, text=" 🎨 视觉与字体 ")
         self._build_tab_visual(tab_visual)
 
         # Tab 3: 关怀语录库
@@ -127,7 +124,6 @@ class SettingsDialog:
         dock = tk.Frame(parent, bg=self.c_bg, padx=16, pady=12)
         dock.pack(side=tk.BOTTOM, fill=tk.X)
 
-        # 右侧：保存并应用 + 取消
         btn_save = tk.Button(
             dock, text="💾 保存并应用", command=self._save_and_apply,
             bg=self.c_accent, fg="#11111b", font=self.f_bold,
@@ -142,7 +138,6 @@ class SettingsDialog:
         )
         btn_cancel.pack(side=tk.RIGHT)
 
-        # 左侧：恢复默认值
         btn_reset = tk.Button(
             dock, text="恢复默认设置", command=self._reset_defaults,
             bg=self.c_btn, fg="#f38ba8", font=self.f_sub,
@@ -154,21 +149,18 @@ class SettingsDialog:
         """
         构建时间节奏面板
         """
-        # 工作时长
         r1 = tk.Frame(tab, bg=self.c_card)
         r1.pack(fill=tk.X, pady=8)
         tk.Label(r1, text="专注工作时长 (分钟):", font=self.f_base, fg=self.c_fg, bg=self.c_card).pack(side=tk.LEFT)
         self.var_work_min = tk.IntVar(value=int(self.config.get("work_duration_minutes", 45)))
         tk.Spinbox(r1, from_=1, to=240, textvariable=self.var_work_min, width=10, font=self.f_base).pack(side=tk.RIGHT)
 
-        # 休息时长
         r2 = tk.Frame(tab, bg=self.c_card)
         r2.pack(fill=tk.X, pady=8)
         tk.Label(r2, text="每次休息时长 (分钟):", font=self.f_base, fg=self.c_fg, bg=self.c_card).pack(side=tk.LEFT)
         self.var_break_min = tk.IntVar(value=int(self.config.get("break_duration_minutes", 3)))
         tk.Spinbox(r2, from_=1, to=60, textvariable=self.var_break_min, width=10, font=self.f_base).pack(side=tk.RIGHT)
 
-        # 预告提前量
         r3 = tk.Frame(tab, bg=self.c_card)
         r3.pack(fill=tk.X, pady=8)
         tk.Label(r3, text="角落下预告提前量 (秒):", font=self.f_base, fg=self.c_fg, bg=self.c_card).pack(side=tk.LEFT)
@@ -177,12 +169,11 @@ class SettingsDialog:
 
     def _build_tab_visual(self, tab: tk.Frame):
         """
-        构建视觉外观定制（背景不透明度与文字不透明度解绑、字体、字号、边框、图片）
+        构建视觉外观定制（解绑透明度、倒计时与语录字体/字号/加粗/颜色、外部字体导入、背景图）
         """
-        # 1. 不透明度调节（背景与文字解绑）
-        # 背景不透明度
+        # ==================== 1. 不透明度调节 ====================
         r_bg_op = tk.Frame(tab, bg=self.c_card)
-        r_bg_op.pack(fill=tk.X, pady=5)
+        r_bg_op.pack(fill=tk.X, pady=3)
         init_bg_op = int(float(self.config.get("overlay_opacity", 0.35)) * 100)
         self.lbl_bg_op = tk.Label(r_bg_op, text=f"蒙版背景不透明度: {init_bg_op}%", font=self.f_base, fg=self.c_fg, bg=self.c_card)
         self.lbl_bg_op.pack(side=tk.LEFT)
@@ -194,9 +185,8 @@ class SettingsDialog:
         )
         scale_bg.pack(side=tk.RIGHT, fill=tk.X, expand=True, padx=(15, 0))
 
-        # 前景文字不透明度
         r_fg_op = tk.Frame(tab, bg=self.c_card)
-        r_fg_op.pack(fill=tk.X, pady=5)
+        r_fg_op.pack(fill=tk.X, pady=3)
         init_fg_op = int(float(self.config.get("text_opacity", 1.0)) * 100)
         self.lbl_fg_op = tk.Label(r_fg_op, text=f"文字与倒计时不透明度: {init_fg_op}%", font=self.f_base, fg=self.c_fg, bg=self.c_card)
         self.lbl_fg_op.pack(side=tk.LEFT)
@@ -208,81 +198,105 @@ class SettingsDialog:
         )
         scale_fg.pack(side=tk.RIGHT, fill=tk.X, expand=True, padx=(15, 0))
 
-        # 2. 颜色与字体
-        r_colors = tk.Frame(tab, bg=self.c_card)
-        r_colors.pack(fill=tk.X, pady=6)
-        tk.Label(r_colors, text="背景色:", font=self.f_base, fg=self.c_fg, bg=self.c_card).pack(side=tk.LEFT)
-        self.var_bg_color = tk.StringVar(value=self.config.get("overlay_bg_color", "#181825"))
-        tk.Entry(r_colors, textvariable=self.var_bg_color, width=9, font=self.f_base).pack(side=tk.LEFT, padx=5)
-        tk.Button(r_colors, text="🎨 选色", command=self._pick_bg_color, bg=self.c_btn, fg=self.c_fg, relief=tk.FLAT).pack(side=tk.LEFT, padx=(0, 15))
-
-        tk.Label(r_colors, text="倒计时颜色:", font=self.f_base, fg=self.c_fg, bg=self.c_card).pack(side=tk.LEFT)
-        self.var_timer_color = tk.StringVar(value=self.config.get("timer_font_color", "#ffffff"))
-        tk.Entry(r_colors, textvariable=self.var_timer_color, width=9, font=self.f_base).pack(side=tk.LEFT, padx=5)
-        tk.Button(r_colors, text="🎨 选色", command=self._pick_timer_color, bg=self.c_btn, fg=self.c_fg, relief=tk.FLAT).pack(side=tk.LEFT)
-
-        # 3. 倒计时字体、字号与颜色
+        # ==================== 2. 倒计时文字定制 ====================
         r_timer = tk.Frame(tab, bg=self.c_card)
         r_timer.pack(fill=tk.X, pady=5)
         tk.Label(r_timer, text="倒计时字体:", font=self.f_base, fg=self.c_fg, bg=self.c_card).pack(side=tk.LEFT)
         self.var_timer_font = tk.StringVar(value=self.config.get("timer_font_family", "Segoe UI"))
-        cb_timer_font = ttk.Combobox(
-            r_timer, textvariable=self.var_timer_font,
-            values=["Segoe UI", "Microsoft YaHei UI", "Consolas", "Arial", "Impact"],
-            width=12, font=self.f_base
-        )
-        cb_timer_font.pack(side=tk.LEFT, padx=5)
+        self.cb_timer_font = ttk.Combobox(r_timer, textvariable=self.var_timer_font, values=self.system_fonts, width=15, font=self.f_base)
+        self.cb_timer_font.pack(side=tk.LEFT, padx=5)
 
-        tk.Label(r_timer, text="字号:", font=self.f_base, fg=self.c_fg, bg=self.c_card).pack(side=tk.LEFT, padx=(5, 0))
+        tk.Label(r_timer, text="字号:", font=self.f_base, fg=self.c_fg, bg=self.c_card).pack(side=tk.LEFT, padx=(6, 0))
         self.var_timer_size = tk.IntVar(value=int(self.config.get("timer_font_size", 68)))
-        tk.Spinbox(r_timer, from_=36, to=120, textvariable=self.var_timer_size, width=5, font=self.f_base).pack(side=tk.LEFT, padx=5)
+        tk.Spinbox(r_timer, from_=36, to=120, textvariable=self.var_timer_size, width=5, font=self.f_base).pack(side=tk.LEFT, padx=3)
 
-        tk.Label(r_timer, text="颜色:", font=self.f_base, fg=self.c_fg, bg=self.c_card).pack(side=tk.LEFT, padx=(5, 0))
+        self.var_timer_bold = tk.BooleanVar(value=bool(self.config.get("timer_font_bold", True)))
+        tk.Checkbutton(r_timer, text="加粗", variable=self.var_timer_bold, bg=self.c_card, fg=self.c_fg, selectcolor="#313244", font=self.f_base).pack(side=tk.LEFT, padx=5)
+
         self.var_timer_color = tk.StringVar(value=self.config.get("timer_font_color", "#ffffff"))
-        tk.Entry(r_timer, textvariable=self.var_timer_color, width=8, font=self.f_base).pack(side=tk.LEFT, padx=3)
-        tk.Button(r_timer, text="🎨 选色", command=self._pick_timer_color, bg=self.c_btn, fg=self.c_fg, relief=tk.FLAT).pack(side=tk.LEFT)
+        tk.Button(r_timer, text="🎨 颜色", command=self._pick_timer_color, bg=self.c_btn, fg=self.c_fg, relief=tk.FLAT).pack(side=tk.LEFT, padx=3)
 
-        # 4. 提示词/语录字体、字号与颜色
+        # ==================== 3. 提示语录文字定制 ====================
         r_quote = tk.Frame(tab, bg=self.c_card)
         r_quote.pack(fill=tk.X, pady=5)
         tk.Label(r_quote, text="提示词字体:", font=self.f_base, fg=self.c_fg, bg=self.c_card).pack(side=tk.LEFT)
         self.var_quote_font = tk.StringVar(value=self.config.get("quote_font_family", "Microsoft YaHei UI"))
-        cb_quote_font = ttk.Combobox(
-            r_quote, textvariable=self.var_quote_font,
-            values=["Microsoft YaHei UI", "Segoe UI", "楷体", "仿宋", "Arial", "Consolas"],
-            width=12, font=self.f_base
-        )
-        cb_quote_font.pack(side=tk.LEFT, padx=5)
+        self.cb_quote_font = ttk.Combobox(r_quote, textvariable=self.var_quote_font, values=self.system_fonts, width=15, font=self.f_base)
+        self.cb_quote_font.pack(side=tk.LEFT, padx=5)
 
-        tk.Label(r_quote, text="字号:", font=self.f_base, fg=self.c_fg, bg=self.c_card).pack(side=tk.LEFT, padx=(5, 0))
+        tk.Label(r_quote, text="字号:", font=self.f_base, fg=self.c_fg, bg=self.c_card).pack(side=tk.LEFT, padx=(6, 0))
         self.var_quote_size = tk.IntVar(value=int(self.config.get("quote_font_size", 18)))
-        tk.Spinbox(r_quote, from_=12, to=48, textvariable=self.var_quote_size, width=5, font=self.f_base).pack(side=tk.LEFT, padx=5)
+        tk.Spinbox(r_quote, from_=12, to=36, textvariable=self.var_quote_size, width=5, font=self.f_base).pack(side=tk.LEFT, padx=3)
 
-        tk.Label(r_quote, text="颜色:", font=self.f_base, fg=self.c_fg, bg=self.c_card).pack(side=tk.LEFT, padx=(5, 0))
+        self.var_quote_bold = tk.BooleanVar(value=bool(self.config.get("quote_font_bold", False)))
+        tk.Checkbutton(r_quote, text="加粗", variable=self.var_quote_bold, bg=self.c_card, fg=self.c_fg, selectcolor="#313244", font=self.f_base).pack(side=tk.LEFT, padx=5)
+
         self.var_quote_color = tk.StringVar(value=self.config.get("quote_font_color", "#cdd6f4"))
-        tk.Entry(r_quote, textvariable=self.var_quote_color, width=8, font=self.f_base).pack(side=tk.LEFT, padx=3)
-        tk.Button(r_quote, text="🎨 选色", command=self._pick_quote_color, bg=self.c_btn, fg=self.c_fg, relief=tk.FLAT).pack(side=tk.LEFT)
+        tk.Button(r_quote, text="🎨 颜色", command=self._pick_quote_color, bg=self.c_btn, fg=self.c_fg, relief=tk.FLAT).pack(side=tk.LEFT, padx=3)
 
-        # 4. 卡片边框厚度与边框颜色
-        r_border = tk.Frame(tab, bg=self.c_card)
-        r_border.pack(fill=tk.X, pady=6)
-        tk.Label(r_border, text="居中卡片边框厚度 (0为无边框):", font=self.f_base, fg=self.c_fg, bg=self.c_card).pack(side=tk.LEFT)
+        # ==================== 4. 自主导入本地字体文件 ====================
+        r_custom_font = tk.Frame(tab, bg=self.c_card)
+        r_custom_font.pack(fill=tk.X, pady=4)
+        tk.Label(r_custom_font, text="自主导入字体:", font=self.f_base, fg=self.c_fg, bg=self.c_card).pack(side=tk.LEFT)
+        self.var_custom_font = tk.StringVar(value=self.config.get("custom_font_path", ""))
+        self.lbl_custom_font_name = tk.Label(r_custom_font, text=os.path.basename(self.var_custom_font.get()) or "(未导入)", font=self.f_sub, fg=self.c_accent, bg=self.c_card)
+        self.lbl_custom_font_name.pack(side=tk.LEFT, padx=6)
+        tk.Button(r_custom_font, text="📂 导入字体文件 (.ttf/.otf)...", command=self._import_custom_font, bg=self.c_btn, fg=self.c_fg, relief=tk.FLAT).pack(side=tk.LEFT, padx=3)
+        tk.Button(r_custom_font, text="清除", command=self._clear_custom_font, bg=self.c_btn, fg="#f38ba8", relief=tk.FLAT).pack(side=tk.LEFT, padx=2)
+
+        # ==================== 5. 背景色与卡片边框 ====================
+        r_bg_border = tk.Frame(tab, bg=self.c_card)
+        r_bg_border.pack(fill=tk.X, pady=5)
+        tk.Label(r_bg_border, text="背景底色:", font=self.f_base, fg=self.c_fg, bg=self.c_card).pack(side=tk.LEFT)
+        self.var_bg_color = tk.StringVar(value=self.config.get("overlay_bg_color", "#181825"))
+        tk.Entry(r_bg_border, textvariable=self.var_bg_color, width=9, font=self.f_base).pack(side=tk.LEFT, padx=4)
+        tk.Button(r_bg_border, text="🎨", command=self._pick_bg_color, bg=self.c_btn, fg=self.c_fg, relief=tk.FLAT).pack(side=tk.LEFT, padx=(0, 15))
+
+        tk.Label(r_bg_border, text="卡片边框:", font=self.f_base, fg=self.c_fg, bg=self.c_card).pack(side=tk.LEFT)
         self.var_border_width = tk.IntVar(value=int(self.config.get("card_border_width", 0)))
-        tk.Spinbox(r_border, from_=0, to=8, textvariable=self.var_border_width, width=5, font=self.f_base).pack(side=tk.LEFT, padx=5)
-
-        tk.Label(r_border, text="边框颜色:", font=self.f_base, fg=self.c_fg, bg=self.c_card).pack(side=tk.LEFT, padx=(10, 0))
+        tk.Spinbox(r_bg_border, from_=0, to=8, textvariable=self.var_border_width, width=4, font=self.f_base).pack(side=tk.LEFT, padx=3)
         self.var_border_color = tk.StringVar(value=self.config.get("card_border_color", "#89b4fa"))
-        tk.Entry(r_border, textvariable=self.var_border_color, width=9, font=self.f_base).pack(side=tk.LEFT, padx=5)
-        tk.Button(r_border, text="🎨 选色", command=self._pick_border_color, bg=self.c_btn, fg=self.c_fg, relief=tk.FLAT).pack(side=tk.LEFT)
+        tk.Button(r_bg_border, text="🎨 边框色", command=self._pick_border_color, bg=self.c_btn, fg=self.c_fg, relief=tk.FLAT).pack(side=tk.LEFT, padx=3)
 
-        # 5. 自定义背景图片路径
+        # ==================== 6. 自定义背景图片 ====================
         r_img = tk.Frame(tab, bg=self.c_card)
-        r_img.pack(fill=tk.X, pady=6)
-        tk.Label(r_img, text="自定义背景图片:", font=self.f_base, fg=self.c_fg, bg=self.c_card).pack(side=tk.LEFT)
+        r_img.pack(fill=tk.X, pady=5)
+        tk.Label(r_img, text="全屏壁纸图片:", font=self.f_base, fg=self.c_fg, bg=self.c_card).pack(side=tk.LEFT)
         self.var_bg_image = tk.StringVar(value=self.config.get("bg_image_path", ""))
         tk.Entry(r_img, textvariable=self.var_bg_image, font=self.f_sub).pack(side=tk.LEFT, fill=tk.X, expand=True, padx=5)
         tk.Button(r_img, text="浏览...", command=self._browse_image, bg=self.c_btn, fg=self.c_fg, relief=tk.FLAT).pack(side=tk.LEFT, padx=2)
         tk.Button(r_img, text="清空", command=lambda: self.var_bg_image.set(""), bg=self.c_btn, fg="#f38ba8", relief=tk.FLAT).pack(side=tk.LEFT)
+
+    def _import_custom_font(self):
+        """
+        自主导入本地 .ttf / .otf 字体文件
+        """
+        font_path = filedialog.askopenfilename(
+            parent=self.window,
+            title="选择要导入的字体文件",
+            filetypes=[("字体文件", "*.ttf;*.otf"), ("所有文件", "*.*")]
+        )
+        if font_path:
+            success = load_font_resource(font_path)
+            font_family = get_font_family_from_file(font_path)
+            if font_family:
+                self.var_custom_font.set(font_path)
+                self.lbl_custom_font_name.config(text=f"{font_family} ({os.path.basename(font_path)})")
+                
+                # 动态把新字体插入下拉选择列表中，并设为当前选中
+                if font_family not in self.system_fonts:
+                    self.system_fonts.insert(0, font_family)
+                    self.cb_timer_font["values"] = self.system_fonts
+                    self.cb_quote_font["values"] = self.system_fonts
+                self.var_timer_font.set(font_family)
+                self.var_quote_font.set(font_family)
+                messagebox.showinfo("导入成功", f"字体【{font_family}】已成功载入！已自动设置为当前倒计时与提示词字体。", parent=self.window)
+            else:
+                messagebox.showwarning("提示", "未能识别该字体文件的名称，但已尝试载入。", parent=self.window)
+
+    def _clear_custom_font(self):
+        self.var_custom_font.set("")
+        self.lbl_custom_font_name.config(text="(未导入)")
 
     def _browse_image(self):
         path = filedialog.askopenfilename(
@@ -313,7 +327,6 @@ class SettingsDialog:
         """
         关怀提醒语录管理
         """
-        # 列表框
         list_frame = tk.Frame(tab, bg=self.c_card)
         list_frame.pack(fill=tk.BOTH, expand=True, pady=(0, 10))
 
@@ -330,7 +343,6 @@ class SettingsDialog:
         for q in self.config.get("quotes", []):
             self.quotes_listbox.insert(tk.END, q)
 
-        # 增删条
         bar = tk.Frame(tab, bg=self.c_card)
         bar.pack(fill=tk.X)
         self.entry_new_quote = tk.Entry(bar, bg="#181825", fg=self.c_fg, font=self.f_base, insertbackground=self.c_fg)
@@ -354,7 +366,6 @@ class SettingsDialog:
         """
         系统与高级（开机自启动、快捷键、闲置超时、设置字号等）
         """
-        # 开机自启动
         r_auto = tk.Frame(tab, bg=self.c_card)
         r_auto.pack(fill=tk.X, pady=8)
         self.var_autostart = tk.BooleanVar(value=is_autostart_enabled())
@@ -365,21 +376,18 @@ class SettingsDialog:
             font=self.f_bold
         ).pack(side=tk.LEFT)
 
-        # 紧急跳过快捷键
         r_hk = tk.Frame(tab, bg=self.c_card)
         r_hk.pack(fill=tk.X, pady=8)
         tk.Label(r_hk, text="紧急跳过快捷键:", font=self.f_base, fg=self.c_fg, bg=self.c_card).pack(side=tk.LEFT)
         self.var_hotkey = tk.StringVar(value=self.config.get("emergency_hotkey", "ctrl+shift+space"))
         tk.Entry(r_hk, textvariable=self.var_hotkey, width=20, font=self.f_base).pack(side=tk.RIGHT)
 
-        # 闲置离开重置
         r_idle = tk.Frame(tab, bg=self.c_card)
         r_idle.pack(fill=tk.X, pady=8)
         tk.Label(r_idle, text="键鼠离开电脑重置 (分钟):", font=self.f_base, fg=self.c_fg, bg=self.c_card).pack(side=tk.LEFT)
         self.var_idle = tk.IntVar(value=int(self.config.get("idle_threshold_minutes", 5)))
         tk.Spinbox(r_idle, from_=0, to=60, textvariable=self.var_idle, width=8, font=self.f_base).pack(side=tk.RIGHT)
 
-        # 全屏应用智能顺延
         r_fs = tk.Frame(tab, bg=self.c_card)
         r_fs.pack(fill=tk.X, pady=8)
         self.var_fs = tk.BooleanVar(value=bool(self.config.get("fullscreen_delay_enabled", True)))
@@ -389,7 +397,6 @@ class SettingsDialog:
             activebackground=self.c_card, activeforeground=self.c_fg, font=self.f_base
         ).pack(side=tk.LEFT)
 
-        # 设置界面字体大小缩放
         r_scale = tk.Frame(tab, bg=self.c_card)
         r_scale.pack(fill=tk.X, pady=8)
         tk.Label(r_scale, text="设置界面字体缩放 (重启面板生效):", font=self.f_base, fg=self.c_fg, bg=self.c_card).pack(side=tk.LEFT)
@@ -414,12 +421,19 @@ class SettingsDialog:
             self.var_text_opacity.set(int(DEFAULT_CONFIG["text_opacity"] * 100))
             self.lbl_fg_op.config(text=f"文字与倒计时不透明度: {int(DEFAULT_CONFIG['text_opacity'] * 100)}%")
             self.var_bg_color.set(DEFAULT_CONFIG["overlay_bg_color"])
-            self.var_timer_color.set(DEFAULT_CONFIG["timer_font_color"])
+            
             self.var_timer_font.set(DEFAULT_CONFIG["timer_font_family"])
             self.var_timer_size.set(DEFAULT_CONFIG["timer_font_size"])
+            self.var_timer_color.set(DEFAULT_CONFIG["timer_font_color"])
+            self.var_timer_bold.set(DEFAULT_CONFIG["timer_font_bold"])
+            
             self.var_quote_font.set(DEFAULT_CONFIG["quote_font_family"])
             self.var_quote_size.set(DEFAULT_CONFIG["quote_font_size"])
             self.var_quote_color.set(DEFAULT_CONFIG["quote_font_color"])
+            self.var_quote_bold.set(DEFAULT_CONFIG["quote_font_bold"])
+            self.var_custom_font.set("")
+            self.lbl_custom_font_name.config(text="(未导入)")
+
             self.var_border_width.set(DEFAULT_CONFIG["card_border_width"])
             self.var_border_color.set(DEFAULT_CONFIG["card_border_color"])
             self.var_bg_image.set(DEFAULT_CONFIG["bg_image_path"])
@@ -439,7 +453,6 @@ class SettingsDialog:
             messagebox.showwarning("提示", "语录库不能为空，请至少保留一条提醒文案！", parent=self.window)
             return
 
-        # 1. 组装配置字典
         new_data = {
             "work_duration_minutes": max(1, self.var_work_min.get()),
             "break_duration_minutes": max(1, self.var_break_min.get()),
@@ -447,12 +460,18 @@ class SettingsDialog:
             "overlay_opacity": round(self.var_bg_opacity.get() / 100.0, 2),
             "text_opacity": round(self.var_text_opacity.get() / 100.0, 2),
             "overlay_bg_color": self.var_bg_color.get().strip() or "#181825",
-            "timer_font_color": self.var_timer_color.get().strip() or "#ffffff",
+            
             "timer_font_family": self.var_timer_font.get().strip() or "Segoe UI",
             "timer_font_size": max(24, self.var_timer_size.get()),
+            "timer_font_color": self.var_timer_color.get().strip() or "#ffffff",
+            "timer_font_bold": self.var_timer_bold.get(),
+            
             "quote_font_family": self.var_quote_font.get().strip() or "Microsoft YaHei UI",
-            "quote_font_size": max(12, self.var_quote_size.get()),
+            "quote_font_size": max(10, self.var_quote_size.get()),
             "quote_font_color": self.var_quote_color.get().strip() or "#cdd6f4",
+            "quote_font_bold": self.var_quote_bold.get(),
+            "custom_font_path": self.var_custom_font.get().strip(),
+
             "card_border_width": max(0, self.var_border_width.get()),
             "card_border_color": self.var_border_color.get().strip() or "#89b4fa",
             "bg_image_path": self.var_bg_image.get().strip(),
@@ -464,11 +483,10 @@ class SettingsDialog:
             "quotes": quotes
         }
 
-        # 2. 同步注册表开机自启动
+        # 同步开机自启动设置到注册表
         main_pyw_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "main.pyw")
         set_autostart(self.var_autostart.get(), main_pyw_path)
 
-        # 3. 广播并落盘
         self.config.update(new_data, auto_save=True)
         messagebox.showinfo("成功", "偏好设置已成功保存并即时生效！", parent=self.window)
         self.window.destroy()

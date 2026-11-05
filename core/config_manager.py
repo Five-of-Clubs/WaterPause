@@ -35,9 +35,13 @@ DEFAULT_CONFIG: Dict[str, Any] = {
     "timer_font_family": "Segoe UI",    # 倒计时字体（Segoe UI / Arial / Consolas / 微软雅黑 等）
     "timer_font_size": 68,              # 倒计时字号
     "timer_font_color": "#ffffff",      # 倒计时文字颜色（纯白）
+    "timer_font_bold": True,            # 倒计时加粗开关
+    
     "quote_font_family": "Microsoft YaHei UI", # 语录字体
     "quote_font_size": 18,              # 语录字号
     "quote_font_color": "#cdd6f4",      # 语录文字颜色
+    "quote_font_bold": False,           # 语录加粗开关
+    "custom_font_path": "",             # 自主导入的外部字体文件 (.ttf/.otf) 路径
     
     "card_bg_color": "",                # 居中内容卡片背景色（留空表示纯透明）
     "card_border_color": "#89b4fa",     # 卡片边框颜色

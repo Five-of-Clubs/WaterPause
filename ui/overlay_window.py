@@ -27,6 +27,7 @@ from PIL import Image, ImageTk
 
 from core.config_manager import ConfigManager
 from os_layer.win_api import enable_dpi_awareness, get_virtual_screen_geometry, make_window_click_through
+from os_layer.font_manager import load_font_resource
 
 # 用于顶层 HUD 窗口背景透明色键（Chroma Key）的特殊保留色
 CHROMA_KEY = "#010203"
@@ -138,31 +139,40 @@ class BreakOverlayWindow:
         )
         container.place(relx=0.5, rely=0.45, anchor="center")
 
-        # 2.1 倒计时大字（支持字体、字号、颜色自定义）
+        # 2.1 倒计时大字（支持字体、字号、颜色、粗细自定义）
+        custom_font = self.config.get("custom_font_path", "").strip()
+        if custom_font and os.path.exists(custom_font):
+            load_font_resource(custom_font)
+
         t_font = self.config.get("timer_font_family", "Segoe UI")
         t_size = int(self.config.get("timer_font_size", 68))
         t_color = self.config.get("timer_font_color", "#ffffff")
+        t_bold = bool(self.config.get("timer_font_bold", True))
+        t_weight = "bold" if t_bold else "normal"
 
         self.time_label = tk.Label(
             container,
             text="00:00",
-            font=(t_font, t_size, "bold"),
+            font=(t_font, t_size, t_weight),
             fg=t_color,
             bg=actual_card_bg
         )
         self.time_label.pack(pady=(0, 15))
 
-        # 2.2 关怀提醒语录（支持字体、字号、颜色自定义）
+        # 2.2 关怀提醒语录（支持字体、字号、颜色、粗细自定义）
         q_font = self.config.get("quote_font_family", "Microsoft YaHei UI")
         q_size = int(self.config.get("quote_font_size", 18))
         q_color = self.config.get("quote_font_color", "#cdd6f4")
+        q_bold = bool(self.config.get("quote_font_bold", False))
+        q_weight = "bold" if q_bold else "normal"
+
         quotes = self.config.get("quotes", ["站起来活动一下，喝杯温水吧。"])
         current_quote = random.choice(quotes) if quotes else "去喝杯水，放松一下吧。"
 
         self.quote_label = tk.Label(
             container,
             text=current_quote,
-            font=(q_font, q_size),
+            font=(q_font, q_size, q_weight),
             fg=q_color,
             bg=actual_card_bg
         )

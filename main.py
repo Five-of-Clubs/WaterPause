@@ -31,6 +31,7 @@ from core.config_manager import ConfigManager
 from core.state_machine import BreakStateMachine, AppStatus
 from os_layer.win_api import enable_dpi_awareness
 from os_layer.hotkey_manager import HotkeyManager
+from os_layer.font_manager import load_font_resource
 from ui.overlay_window import BreakOverlayWindow
 from ui.toast_window import PreBreakToast
 from ui.settings_dialog import SettingsDialog
@@ -61,6 +62,11 @@ class BreakReminderApplication:
         # 3. 初始化配置管理器
         config_path = os.path.join(PROJECT_ROOT, "config.json")
         self.config = ConfigManager(config_path)
+
+        # 加载用户自主导入的本地字体文件（若有）
+        custom_font = self.config.get("custom_font_path", "").strip()
+        if custom_font and os.path.exists(custom_font):
+            load_font_resource(custom_font)
 
         # 4. 初始化核心业务状态机
         self.state_machine = BreakStateMachine(self.config)
