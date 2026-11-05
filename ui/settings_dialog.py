@@ -26,7 +26,7 @@ import tkinter as tk
 from tkinter import ttk, colorchooser, filedialog, messagebox
 from typing import Optional, List, Callable
 
-from core.config_manager import ConfigManager, DEFAULT_CONFIG
+from core.config_manager import ConfigManager, DEFAULT_CONFIG, sanitize_color
 from os_layer.autostart import is_autostart_enabled, set_autostart
 from os_layer.font_manager import get_available_fonts, load_font_resource, get_font_family_from_file
 
@@ -165,27 +165,39 @@ class SettingsDialog:
         收集当前界面上用户正在编辑的所有草稿参数（即使尚未点击保存）
         """
         quotes = list(self.quotes_listbox.get(0, tk.END)) if hasattr(self, 'quotes_listbox') else []
+        # 防呆清洗输入色号（自动补全 '#'，支持 003153 自动识别为 #003153，防止误填崩溃）
+        clean_bg_color = sanitize_color(self.var_bg_color.get(), fallback="#003153")
+        clean_timer_color = sanitize_color(self.var_timer_color.get(), fallback="#ffffff")
+        clean_quote_color = sanitize_color(self.var_quote_color.get(), fallback="#cdd6f4")
+        clean_border_color = sanitize_color(self.var_border_color.get(), fallback="#89b4fa")
+
+        # 实时纠正回界面控件变量，让用户直观看到补齐 '#' 后的标准色号
+        self.var_bg_color.set(clean_bg_color)
+        self.var_timer_color.set(clean_timer_color)
+        self.var_quote_color.set(clean_quote_color)
+        self.var_border_color.set(clean_border_color)
+
         return {
             "work_duration_minutes": max(1, self.var_work_min.get()),
             "break_duration_minutes": max(1, self.var_break_min.get()),
             "pre_break_seconds": max(5, self.var_pre_sec.get()),
             "overlay_opacity": round(self.var_bg_opacity.get() / 100.0, 2),
             "text_opacity": round(self.var_text_opacity.get() / 100.0, 2),
-            "overlay_bg_color": self.var_bg_color.get().strip() or "#181825",
+            "overlay_bg_color": clean_bg_color,
             
             "timer_font_family": self.var_timer_font.get().strip() or "Segoe UI",
             "timer_font_size": max(24, self.var_timer_size.get()),
-            "timer_font_color": self.var_timer_color.get().strip() or "#ffffff",
+            "timer_font_color": clean_timer_color,
             "timer_font_bold": self.var_timer_bold.get(),
             
             "quote_font_family": self.var_quote_font.get().strip() or "Microsoft YaHei UI",
             "quote_font_size": max(10, self.var_quote_size.get()),
-            "quote_font_color": self.var_quote_color.get().strip() or "#cdd6f4",
+            "quote_font_color": clean_quote_color,
             "quote_font_bold": self.var_quote_bold.get(),
             "custom_font_path": self.var_custom_font.get().strip(),
 
             "card_border_width": max(0, self.var_border_width.get()),
-            "card_border_color": self.var_border_color.get().strip() or "#89b4fa",
+            "card_border_color": clean_border_color,
             "bg_image_path": self.var_bg_image.get().strip(),
             "emergency_hotkey": self.var_hotkey.get().strip().lower() or "ctrl+shift+space",
             "idle_threshold_minutes": max(0, self.var_idle.get()),
@@ -232,7 +244,7 @@ class SettingsDialog:
         # ==================== 1. 不透明度调节 ====================
         r_bg_op = tk.Frame(tab, bg=self.c_card)
         r_bg_op.pack(fill=tk.X, pady=3)
-        init_bg_op = int(float(self.config.get("overlay_opacity", 0.35)) * 100)
+        init_bg_op = int(float(self.config.get("overlay_opacity", 0.60)) * 100)
         self.lbl_bg_op = tk.Label(r_bg_op, text=f"蒙版背景不透明度: {init_bg_op}%", font=self.f_base, fg=self.c_fg, bg=self.c_card)
         self.lbl_bg_op.pack(side=tk.LEFT)
         self.var_bg_opacity = tk.IntVar(value=init_bg_op)
@@ -306,14 +318,17 @@ class SettingsDialog:
         r_bg_border = tk.Frame(tab, bg=self.c_card)
         r_bg_border.pack(fill=tk.X, pady=5)
         tk.Label(r_bg_border, text="背景底色:", font=self.f_base, fg=self.c_fg, bg=self.c_card).pack(side=tk.LEFT)
-        self.var_bg_color = tk.StringVar(value=self.config.get("overlay_bg_color", "#181825"))
-        tk.Entry(r_bg_border, textvariable=self.var_bg_color, width=9, font=self.f_base).pack(side=tk.LEFT, padx=4)
-        tk.Button(r_bg_border, text="🎨", command=self._pick_bg_color, bg=self.c_btn, fg=self.c_fg, relief=tk.FLAT).pack(side=tk.LEFT, padx=(0, 15))
+        self.var_bg_color = tk.StringVar(value=sanitize_color(self.config.get("overlay_bg_color", "#003153"), fallback="#003153"))
+        entry_bg = tk.Entry(r_bg_border, textvariable=self.var_bg_color, width=9, font=self.f_base)
+        entry_bg.pack(side=tk.LEFT, padx=4)
+        # 输入框失去焦点时自动执行防呆校验与格式纠正（自动补全 '#'）
+        entry_bg.bind("<FocusOut>", lambda e: self.var_bg_color.set(sanitize_color(self.var_bg_color.get(), fallback="#003153")))
+        tk.Button(r_bg_border, text="🎨 选色", command=self._pick_bg_color, bg=self.c_btn, fg=self.c_fg, relief=tk.FLAT).pack(side=tk.LEFT, padx=(0, 15))
 
         tk.Label(r_bg_border, text="卡片边框:", font=self.f_base, fg=self.c_fg, bg=self.c_card).pack(side=tk.LEFT)
         self.var_border_width = tk.IntVar(value=int(self.config.get("card_border_width", 0)))
         tk.Spinbox(r_bg_border, from_=0, to=8, textvariable=self.var_border_width, width=4, font=self.f_base).pack(side=tk.LEFT, padx=3)
-        self.var_border_color = tk.StringVar(value=self.config.get("card_border_color", "#89b4fa"))
+        self.var_border_color = tk.StringVar(value=sanitize_color(self.config.get("card_border_color", "#89b4fa"), fallback="#89b4fa"))
         tk.Button(r_bg_border, text="🎨 边框色", command=self._pick_border_color, bg=self.c_btn, fg=self.c_fg, relief=tk.FLAT).pack(side=tk.LEFT, padx=3)
 
         # ==================== 6. 自定义背景图片 ====================
@@ -366,20 +381,24 @@ class SettingsDialog:
             self.var_bg_image.set(path)
 
     def _pick_bg_color(self):
-        c = colorchooser.askcolor(initialcolor=self.var_bg_color.get(), title="选择背景色", parent=self.window)
-        if c and c[1]: self.var_bg_color.set(c[1])
+        cur = sanitize_color(self.var_bg_color.get(), fallback="#003153")
+        c = colorchooser.askcolor(initialcolor=cur, title="选择背景色", parent=self.window)
+        if c and c[1]: self.var_bg_color.set(sanitize_color(c[1], fallback="#003153"))
 
     def _pick_timer_color(self):
-        c = colorchooser.askcolor(initialcolor=self.var_timer_color.get(), title="选择倒计时颜色", parent=self.window)
-        if c and c[1]: self.var_timer_color.set(c[1])
+        cur = sanitize_color(self.var_timer_color.get(), fallback="#ffffff")
+        c = colorchooser.askcolor(initialcolor=cur, title="选择倒计时颜色", parent=self.window)
+        if c and c[1]: self.var_timer_color.set(sanitize_color(c[1], fallback="#ffffff"))
 
     def _pick_quote_color(self):
-        c = colorchooser.askcolor(initialcolor=self.var_quote_color.get(), title="选择提示词颜色", parent=self.window)
-        if c and c[1]: self.var_quote_color.set(c[1])
+        cur = sanitize_color(self.var_quote_color.get(), fallback="#cdd6f4")
+        c = colorchooser.askcolor(initialcolor=cur, title="选择提示词颜色", parent=self.window)
+        if c and c[1]: self.var_quote_color.set(sanitize_color(c[1], fallback="#cdd6f4"))
 
     def _pick_border_color(self):
-        c = colorchooser.askcolor(initialcolor=self.var_border_color.get(), title="选择边框颜色", parent=self.window)
-        if c and c[1]: self.var_border_color.set(c[1])
+        cur = sanitize_color(self.var_border_color.get(), fallback="#89b4fa")
+        c = colorchooser.askcolor(initialcolor=cur, title="选择边框颜色", parent=self.window)
+        if c and c[1]: self.var_border_color.set(sanitize_color(c[1], fallback="#89b4fa"))
 
     def _build_tab_quotes(self, tab: tk.Frame):
         """
@@ -511,35 +530,8 @@ class SettingsDialog:
             messagebox.showwarning("提示", "语录库不能为空，请至少保留一条提醒文案！", parent=self.window)
             return
 
-        new_data = {
-            "work_duration_minutes": max(1, self.var_work_min.get()),
-            "break_duration_minutes": max(1, self.var_break_min.get()),
-            "pre_break_seconds": max(5, self.var_pre_sec.get()),
-            "overlay_opacity": round(self.var_bg_opacity.get() / 100.0, 2),
-            "text_opacity": round(self.var_text_opacity.get() / 100.0, 2),
-            "overlay_bg_color": self.var_bg_color.get().strip() or "#181825",
-            
-            "timer_font_family": self.var_timer_font.get().strip() or "Segoe UI",
-            "timer_font_size": max(24, self.var_timer_size.get()),
-            "timer_font_color": self.var_timer_color.get().strip() or "#ffffff",
-            "timer_font_bold": self.var_timer_bold.get(),
-            
-            "quote_font_family": self.var_quote_font.get().strip() or "Microsoft YaHei UI",
-            "quote_font_size": max(10, self.var_quote_size.get()),
-            "quote_font_color": self.var_quote_color.get().strip() or "#cdd6f4",
-            "quote_font_bold": self.var_quote_bold.get(),
-            "custom_font_path": self.var_custom_font.get().strip(),
-
-            "card_border_width": max(0, self.var_border_width.get()),
-            "card_border_color": self.var_border_color.get().strip() or "#89b4fa",
-            "bg_image_path": self.var_bg_image.get().strip(),
-            "emergency_hotkey": self.var_hotkey.get().strip().lower() or "ctrl+shift+space",
-            "idle_threshold_minutes": max(0, self.var_idle.get()),
-            "fullscreen_delay_enabled": self.var_fs.get(),
-            "settings_font_scale": self.var_font_scale.get(),
-            "autostart": self.var_autostart.get(),
-            "quotes": quotes
-        }
+        new_data = self._collect_current_ui_settings()
+        new_data["quotes"] = quotes
 
         # 同步开机自启动设置到注册表
         main_pyw_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "main.pyw")

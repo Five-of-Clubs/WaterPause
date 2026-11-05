@@ -29,7 +29,7 @@ from typing import Optional, Dict, Any
 from PIL import Image, ImageTk, ImageOps
 import keyboard
 
-from core.config_manager import ConfigManager
+from core.config_manager import ConfigManager, sanitize_color
 from os_layer.win_api import enable_dpi_awareness, get_virtual_screen_geometry, make_window_click_through
 from os_layer.font_manager import load_font_resource
 
@@ -79,151 +79,188 @@ class BreakOverlayWindow:
                 return override_config[key]
             return self.config.get(key, default)
 
-        # ==========================================
-        # 1. 构建底层背景幕布 (Backdrop Window)
-        # ==========================================
-        self.bg_window = tk.Toplevel(self.root)
-        self.bg_window.title("BreakOverlay_Backdrop")
-        self.bg_window.overrideredirect(True)
-        self.bg_window.attributes("-topmost", True)
-        
-        # 读取背景不透明度 (默认 0.35)
-        bg_opacity = float(get_val("overlay_opacity", 0.35))
-        self.bg_window.attributes("-alpha", bg_opacity)
-        self.bg_window.geometry(f"{vw}x{vh}+{vx}+{vy}")
+        try:
+            # ==========================================
+            # 1. 构建底层背景幕布 (Backdrop Window)
+            # ==========================================
+            self.bg_window = tk.Toplevel(self.root)
+            self.bg_window.title("BreakOverlay_Backdrop")
+            self.bg_window.overrideredirect(True)
+            self.bg_window.attributes("-topmost", True)
+            
+            # 读取背景不透明度 (默认 0.60)
+            bg_opacity = float(get_val("overlay_opacity", 0.60))
+            self.bg_window.attributes("-alpha", bg_opacity)
+            self.bg_window.geometry(f"{vw}x{vh}+{vx}+{vy}")
 
-        bg_color = get_val("overlay_bg_color", "#181825")
-        self.bg_window.configure(bg=bg_color)
-
-        # 检查是否配置了自定义背景图
-        bg_img_path = str(get_val("bg_image_path", "")).strip()
-        if bg_img_path and os.path.exists(bg_img_path):
+            # 防呆清洗背景底色：若用户输入 '003153' 或乱填，自动清洗为 '#003153'，绝不崩溃
+            raw_bg = get_val("overlay_bg_color", "#003153")
+            bg_color = sanitize_color(raw_bg, fallback="#003153")
             try:
-                pil_img = Image.open(bg_img_path)
-                # 等比例居中填充裁剪 (Cover/Fill)，保证任何比例图片绝不变形
-                fitted_img = ImageOps.fit(
-                    pil_img, (vw, vh),
-                    method=Image.Resampling.LANCZOS,
-                    centering=(0.5, 0.5)
-                )
-                self._bg_photo = ImageTk.PhotoImage(fitted_img)
-                lbl_img = tk.Label(self.bg_window, image=self._bg_photo, bg=bg_color)
-                lbl_img.place(x=0, y=0, width=vw, height=vh)
+                self.bg_window.configure(bg=bg_color)
             except Exception as e:
-                print(f"[BreakOverlayWindow] 加载自定义背景图失败: {e}")
+                print(f"[BreakOverlayWindow] 配置背景底色异常，平滑回退安全色: {e}")
+                bg_color = "#003153"
+                self.bg_window.configure(bg=bg_color)
 
-        # 注入背景层鼠标穿透
-        self.bg_window.update_idletasks()
-        try:
-            hwnd_bg = int(self.bg_window.wm_frame(), 16)
-            make_window_click_through(hwnd_bg)
-        except Exception as e:
-            print(f"[BreakOverlayWindow] 注入背景层穿透失败: {e}")
+            # 检查是否配置了自定义背景图
+            bg_img_path = str(get_val("bg_image_path", "")).strip()
+            if bg_img_path and os.path.exists(bg_img_path):
+                try:
+                    pil_img = Image.open(bg_img_path)
+                    # 等比例居中填充裁剪 (Cover/Fill)，保证任何比例图片绝不变形
+                    fitted_img = ImageOps.fit(
+                        pil_img, (vw, vh),
+                        method=Image.Resampling.LANCZOS,
+                        centering=(0.5, 0.5)
+                    )
+                    self._bg_photo = ImageTk.PhotoImage(fitted_img)
+                    lbl_img = tk.Label(self.bg_window, image=self._bg_photo, bg=bg_color)
+                    lbl_img.place(x=0, y=0, width=vw, height=vh)
+                except Exception as e:
+                    print(f"[BreakOverlayWindow] 加载自定义背景图失败: {e}")
 
-        # ==========================================
-        # 2. 构建顶层前景文字 HUD (Foreground Window)
-        # ==========================================
-        self.fg_window = tk.Toplevel(self.root)
-        self.fg_window.title("BreakOverlay_Foreground")
-        self.fg_window.overrideredirect(True)
-        self.fg_window.attributes("-topmost", True)
-        
-        # 读取文字层独立不透明度 (默认 1.0)
-        text_alpha = float(get_val("text_opacity", 1.0))
-        self.fg_window.attributes("-alpha", text_alpha)
-        
-        self.fg_window.configure(bg=CHROMA_KEY)
-        self.fg_window.attributes("-transparentcolor", CHROMA_KEY)
-        self.fg_window.geometry(f"{vw}x{vh}+{vx}+{vy}")
-
-        # 构建居中内容卡片容器
-        card_bg = str(get_val("card_bg_color", "")).strip()
-        actual_card_bg = card_bg if card_bg else CHROMA_KEY
-        border_width = int(get_val("card_border_width", 0))
-        border_color = str(get_val("card_border_color", "#89b4fa"))
-
-        container = tk.Frame(
-            self.fg_window,
-            bg=actual_card_bg,
-            highlightbackground=border_color if border_width > 0 else actual_card_bg,
-            highlightthickness=border_width,
-            padx=35,
-            pady=25
-        )
-        container.place(relx=0.5, rely=0.45, anchor="center")
-
-        # 2.1 倒计时大字（支持字体、字号、颜色、粗细自定义）
-        custom_font = str(get_val("custom_font_path", "")).strip()
-        if custom_font and os.path.exists(custom_font):
-            load_font_resource(custom_font)
-
-        t_font = str(get_val("timer_font_family", "Segoe UI"))
-        t_size = int(get_val("timer_font_size", 68))
-        t_color = str(get_val("timer_font_color", "#ffffff"))
-        t_bold = bool(get_val("timer_font_bold", True))
-        t_weight = "bold" if t_bold else "normal"
-
-        initial_time = "03:00" if is_preview else "00:00"
-        self.time_label = tk.Label(
-            container,
-            text=initial_time,
-            font=(t_font, t_size, t_weight),
-            fg=t_color,
-            bg=actual_card_bg
-        )
-        self.time_label.pack(pady=(0, 15))
-
-        # 2.2 关怀提醒语录（支持字体、字号、颜色、粗细自定义）
-        q_font = str(get_val("quote_font_family", "Microsoft YaHei UI"))
-        q_size = int(get_val("quote_font_size", 18))
-        q_color = str(get_val("quote_font_color", "#cdd6f4"))
-        q_bold = bool(get_val("quote_font_bold", False))
-        q_weight = "bold" if q_bold else "normal"
-
-        quotes = get_val("quotes", ["站起来活动一下，喝杯温水吧。"])
-        current_quote = random.choice(quotes) if quotes else "去喝杯水，放松一下吧。"
-
-        self.quote_label = tk.Label(
-            container,
-            text=current_quote,
-            font=(q_font, q_size, q_weight),
-            fg=q_color,
-            bg=actual_card_bg
-        )
-        self.quote_label.pack(pady=(0, 20))
-
-        # 2.3 底部提示文案
-        hotkey = str(get_val("emergency_hotkey", "ctrl+shift+space")).upper()
-        if is_preview:
-            tip_text = f"[ 👁 效果实时预览中 (8秒后自动退出) | 按 ESC 或 快捷键({hotkey}) 立即返回设置，不打乱正常计时 ]"
-        else:
-            tip_text = f"[ 鼠标操作已完全穿透，可正常操作下方软件 | 紧急跳过请按快捷键：{hotkey} ]"
-
-        self.tip_label = tk.Label(
-            container,
-            text=tip_text,
-            font=("Microsoft YaHei UI", 11),
-            fg="#a6adc8",
-            bg=actual_card_bg
-        )
-        self.tip_label.pack()
-
-        # 注入文字层鼠标穿透
-        self.fg_window.update_idletasks()
-        try:
-            hwnd_fg = int(self.fg_window.wm_frame(), 16)
-            make_window_click_through(hwnd_fg)
-        except Exception as e:
-            print(f"[BreakOverlayWindow] 注入前景层穿透失败: {e}")
-
-        # 预览模式下的退出监听与自动退出定时器
-        if is_preview:
+            # 注入背景层鼠标穿透
+            self.bg_window.update_idletasks()
             try:
-                keyboard.add_hotkey("esc", self.hide)
-            except Exception:
-                pass
-            # 8 秒后自动关闭预览
-            self._preview_timer_id = self.root.after(8000, self.hide)
+                hwnd_bg = int(self.bg_window.wm_frame(), 16)
+                make_window_click_through(hwnd_bg)
+            except Exception as e:
+                print(f"[BreakOverlayWindow] 注入背景层穿透失败: {e}")
+
+            # ==========================================
+            # 2. 构建顶层前景文字 HUD (Foreground Window)
+            # ==========================================
+            self.fg_window = tk.Toplevel(self.root)
+            self.fg_window.title("BreakOverlay_Foreground")
+            self.fg_window.overrideredirect(True)
+            self.fg_window.attributes("-topmost", True)
+            
+            # 读取文字层独立不透明度 (默认 1.0)
+            text_alpha = float(get_val("text_opacity", 1.0))
+            self.fg_window.attributes("-alpha", text_alpha)
+            
+            self.fg_window.configure(bg=CHROMA_KEY)
+            self.fg_window.attributes("-transparentcolor", CHROMA_KEY)
+            self.fg_window.geometry(f"{vw}x{vh}+{vx}+{vy}")
+
+            # 构建居中内容卡片容器
+            card_bg = str(get_val("card_bg_color", "")).strip()
+            actual_card_bg = sanitize_color(card_bg, fallback=CHROMA_KEY) if card_bg else CHROMA_KEY
+            border_width = int(get_val("card_border_width", 0))
+            border_color = sanitize_color(get_val("card_border_color", "#89b4fa"), fallback="#89b4fa")
+
+            try:
+                container = tk.Frame(
+                    self.fg_window,
+                    bg=actual_card_bg,
+                    highlightbackground=border_color if border_width > 0 else actual_card_bg,
+                    highlightthickness=border_width,
+                    padx=35,
+                    pady=25
+                )
+                container.place(relx=0.5, rely=0.45, anchor="center")
+            except Exception as e:
+                print(f"[BreakOverlayWindow] 卡片边框配置异常，使用无边框透明卡片: {e}")
+                container = tk.Frame(self.fg_window, bg=CHROMA_KEY, padx=35, pady=25)
+                container.place(relx=0.5, rely=0.45, anchor="center")
+                actual_card_bg = CHROMA_KEY
+
+            # 2.1 倒计时大字（支持字体、字号、颜色、粗细自定义）
+            custom_font = str(get_val("custom_font_path", "")).strip()
+            if custom_font and os.path.exists(custom_font):
+                load_font_resource(custom_font)
+
+            t_font = str(get_val("timer_font_family", "Segoe UI"))
+            t_size = int(get_val("timer_font_size", 68))
+            t_color = sanitize_color(get_val("timer_font_color", "#ffffff"), fallback="#ffffff")
+            t_bold = bool(get_val("timer_font_bold", True))
+            t_weight = "bold" if t_bold else "normal"
+
+            initial_time = "03:00" if is_preview else "00:00"
+            try:
+                self.time_label = tk.Label(
+                    container,
+                    text=initial_time,
+                    font=(t_font, t_size, t_weight),
+                    fg=t_color,
+                    bg=actual_card_bg
+                )
+            except Exception as e:
+                print(f"[BreakOverlayWindow] 倒计时字体异常，回退默认系统字体: {e}")
+                self.time_label = tk.Label(
+                    container,
+                    text=initial_time,
+                    font=("Segoe UI", 68, "bold"),
+                    fg="#ffffff",
+                    bg=actual_card_bg
+                )
+            self.time_label.pack(pady=(0, 15))
+
+            # 2.2 关怀提醒语录（支持字体、字号、颜色、粗细自定义）
+            q_font = str(get_val("quote_font_family", "Microsoft YaHei UI"))
+            q_size = int(get_val("quote_font_size", 18))
+            q_color = sanitize_color(get_val("quote_font_color", "#cdd6f4"), fallback="#cdd6f4")
+            q_bold = bool(get_val("quote_font_bold", False))
+            q_weight = "bold" if q_bold else "normal"
+
+            quotes = get_val("quotes", ["站起来活动一下，喝杯温水吧。"])
+            current_quote = random.choice(quotes) if quotes else "去喝杯水，放松一下吧。"
+
+            try:
+                self.quote_label = tk.Label(
+                    container,
+                    text=current_quote,
+                    font=(q_font, q_size, q_weight),
+                    fg=q_color,
+                    bg=actual_card_bg
+                )
+            except Exception as e:
+                print(f"[BreakOverlayWindow] 语录字体异常，回退默认系统字体: {e}")
+                self.quote_label = tk.Label(
+                    container,
+                    text=current_quote,
+                    font=("Microsoft YaHei UI", 18),
+                    fg="#cdd6f4",
+                    bg=actual_card_bg
+                )
+            self.quote_label.pack(pady=(0, 20))
+
+            # 2.3 底部提示文案
+            hotkey = str(get_val("emergency_hotkey", "ctrl+shift+space")).upper()
+            if is_preview:
+                tip_text = f"[ 👁 效果实时预览中 (8秒后自动退出) | 按 ESC 或 快捷键({hotkey}) 立即返回设置，不打乱正常计时 ]"
+            else:
+                tip_text = f"[ 鼠标操作已完全穿透，可正常操作下方软件 | 紧急跳过请按快捷键：{hotkey} ]"
+
+            self.tip_label = tk.Label(
+                container,
+                text=tip_text,
+                font=("Microsoft YaHei UI", 11),
+                fg="#a6adc8",
+                bg=actual_card_bg
+            )
+            self.tip_label.pack()
+
+            # 注入文字层鼠标穿透
+            self.fg_window.update_idletasks()
+            try:
+                hwnd_fg = int(self.fg_window.wm_frame(), 16)
+                make_window_click_through(hwnd_fg)
+            except Exception as e:
+                print(f"[BreakOverlayWindow] 注入前景层穿透失败: {e}")
+
+            # 预览模式下的退出监听与自动退出定时器
+            if is_preview:
+                try:
+                    keyboard.add_hotkey("esc", self.hide)
+                except Exception:
+                    pass
+                # 8 秒后自动关闭预览
+                self._preview_timer_id = self.root.after(8000, self.hide)
+        except Exception as e:
+            print(f"[BreakOverlayWindow] 展现全屏蒙版发生未预料异常，执行防呆兜底关闭: {e}")
+            self.hide()
 
     def update_countdown(self, remaining_seconds: int):
         """

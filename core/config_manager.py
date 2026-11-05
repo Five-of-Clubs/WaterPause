@@ -16,7 +16,35 @@
 
 import json
 import os
+import re
 from typing import Any, Dict, List, Callable
+
+
+def sanitize_color(color_val: Any, fallback: str = "#003153") -> str:
+    """
+    【颜色防呆清洗器 (Color Sanitizer)】
+    智能兼容各种用户误填场景：
+    1. 自动剔除首尾误敲的空格、多余的 '#'（如 '##003153'）。
+    2. 自动补全 '#'：若用户漏填了 '#'（例如填成了 '003153' 或 'fff'），自动纠正为 '#003153'。
+    3. 支持剪切板误带 Alpha 的 8 位色（如 '003153ff'），自动截取前 6 位 RGB。
+    4. 合法性严谨校验：必须是标准 3 位或 6 位 Hex 颜色。
+    5. 兜底容错：若完全乱填（如 'abcxyz' 或乱码），自动平滑回退到安全默认色，绝不让界面卡住或变灰！
+    """
+    if not color_val:
+        return fallback
+    c = str(color_val).strip()
+    # 剔除开头可能多打的 #（如 ##003153）
+    c_hex = c.lstrip("#")
+    # 如果纯十六进制部分符合 3 位或 6 位
+    if re.match(r"^[0-9a-fA-F]{3}$", c_hex) or re.match(r"^[0-9a-fA-F]{6}$", c_hex):
+        return f"#{c_hex}".lower()
+    # 容错：如果用户从设计软件复制了带 Alpha 通道的 8 位 Hex（如 003153ff），自动截取前 6 位 RGB
+    if re.match(r"^[0-9a-fA-F]{8}$", c_hex):
+        return f"#{c_hex[:6]}".lower()
+    # 严格匹配 #RGB 或 #RRGGBB
+    if re.match(r"^#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6})$", c):
+        return c.lower()
+    return fallback
 
 
 # 默认系统配置模板
@@ -103,6 +131,13 @@ class ConfigManager:
             # 增量补充：如果本地 json 里缺失了新版本增加的配置字段，用默认值填补
             merged_config = DEFAULT_CONFIG.copy()
             merged_config.update(loaded_data)
+
+            # 核心颜色字段自动防呆清洗，防止用户在 config.json 误删 '#' 或乱填导致渲染异常
+            merged_config["overlay_bg_color"] = sanitize_color(merged_config.get("overlay_bg_color"), "#003153")
+            merged_config["timer_font_color"] = sanitize_color(merged_config.get("timer_font_color"), "#ffffff")
+            merged_config["quote_font_color"] = sanitize_color(merged_config.get("quote_font_color"), "#cdd6f4")
+            merged_config["card_border_color"] = sanitize_color(merged_config.get("card_border_color"), "#89b4fa")
+
             self._config = merged_config
         except Exception as e:
             print(f"[ConfigManager] 读取配置文件异常，回退至默认配置: {e}")
