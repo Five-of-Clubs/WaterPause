@@ -14,6 +14,37 @@ import ctypes
 import tkinter as tk
 from typing import Optional
 
+import win32event
+import win32api
+import winerror
+import win32gui
+import win32con
+
+# 全局单例句柄引用（必须维持全局变量，否则句柄被垃圾回收后内核锁就被释放了）
+_single_instance_mutex = None
+
+
+def ensure_single_instance() -> bool:
+    """
+    【单例进程互斥锁 (Single-Instance Mutex)】
+    底层原理:
+        向 Windows 内核注册一个全局命名的互斥对象 (Named Mutex)。
+        如果该 Mutex 已经存在，说明另一个 WaterPause 进程已经在运行了。
+        直接退出当前重复进程，防止在托盘产生多个重复小图标。
+    """
+    global _single_instance_mutex
+    MUTEX_NAME = "Global\\WaterPause_SingleInstance_Mutex_2026"
+    _single_instance_mutex = win32event.CreateMutex(None, False, MUTEX_NAME)
+    if win32api.GetLastError() == winerror.ERROR_ALREADY_EXISTS:
+        win32gui.MessageBox(
+            0,
+            "WaterPause 已经在后台静默运行中！\n请查看屏幕右下角系统托盘的小水滴图标。",
+            "WaterPause 运行提示",
+            win32con.MB_OK | win32con.MB_ICONINFORMATION | win32con.MB_TOPMOST
+        )
+        return False
+    return True
+
 # 核心 Windows 技巧：设置独立 AppUserModelID
 # 告诉 Windows 任务栏这是一个独立应用程序，不要套用 Python 默认的小蟒蛇图标！
 try:
@@ -203,5 +234,7 @@ class BreakReminderApplication:
 
 
 if __name__ == "__main__":
+    if not ensure_single_instance():
+        sys.exit(0)
     app = BreakReminderApplication()
     app.run()

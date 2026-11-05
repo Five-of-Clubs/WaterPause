@@ -23,7 +23,7 @@ def create_shortcut():
 
     shell = win32com.client.Dispatch("WScript.Shell")
     desktop = shell.SpecialFolders("Desktop")
-    shortcut_path = os.path.join(desktop, "防久坐与饮水提醒.lnk")
+    shortcut_path = os.path.join(desktop, "WaterPause.lnk")
 
     shortcut = shell.CreateShortcut(shortcut_path)
     shortcut.TargetPath = pythonw_exe

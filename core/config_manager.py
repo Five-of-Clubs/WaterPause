@@ -27,9 +27,9 @@ DEFAULT_CONFIG: Dict[str, Any] = {
     "pre_break_seconds": 30,            # 休息预告提前量（秒）
     
     # 2. 蒙版视觉样式配置（背景与文字解绑，支持高度自由定制）
-    "overlay_opacity": 0.35,            # 蒙版背景不透明度（0.05 ~ 0.95，默认 35%）
+    "overlay_opacity": 0.60,            # 蒙版背景不透明度（默认 60%，提供更沉浸护眼的遮罩感）
     "text_opacity": 1.0,                # 中间计时与文字不透明度（0.2 ~ 1.0，默认 100% 纯正清晰）
-    "overlay_bg_color": "#181825",      # 蒙版暗色背景色
+    "overlay_bg_color": "#003153",      # 蒙版暗色背景色（经典优雅深沉的普鲁士蓝）
     
     # 3. 字体、字号、颜色与卡片边框定制
     "timer_font_family": "Segoe UI",    # 倒计时字体（Segoe UI / Arial / Consolas / 微软雅黑 等）

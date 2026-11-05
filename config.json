@@ -4,7 +4,7 @@
     "pre_break_seconds": 30,
     "overlay_opacity": 0.8,
     "text_opacity": 1.0,
-    "overlay_bg_color": "#2c001e",
+    "overlay_bg_color": "#003153",
     "timer_font_family": "Segoe UI",
     "timer_font_size": 68,
     "timer_font_color": "#ffffff",
@@ -22,7 +22,7 @@
     "emergency_hotkey": "ctrl+shift+space",
     "idle_threshold_minutes": 60,
     "fullscreen_delay_enabled": true,
-    "autostart": true,
+    "autostart": false,
     "settings_font_scale": "大 (13pt)",
     "quotes": [
         "站起来活动一下，去喝杯温水，保护好你的专注力与身体状态。",

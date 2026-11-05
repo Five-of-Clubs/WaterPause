@@ -73,9 +73,9 @@ class TrayIconManager:
         """
         image = self._load_tray_image()
         
-        # 构建右键上下文菜单
+        # 构建托盘上下文菜单（不设 default=True，左键与右键均仅弹出交互菜单，防误触）
         menu = Menu(
-            item("☕ 立即进入休息", self._wrap(self.on_trigger_break), default=True),
+            item("☕ 立即进入休息", self._wrap(self.on_trigger_break)),
             Menu.SEPARATOR,
             item("⏸ 暂停计时", Menu(
                 item("暂停 30 分钟", self._wrap(lambda: self.on_pause(30 * 60))),

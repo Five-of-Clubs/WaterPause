@@ -21,8 +21,10 @@ CURRENT_DIR = os.path.dirname(os.path.abspath(__file__))
 if CURRENT_DIR not in sys.path:
     sys.path.insert(0, CURRENT_DIR)
 
-from main import BreakReminderApplication
+from main import BreakReminderApplication, ensure_single_instance
 
 if __name__ == "__main__":
+    if not ensure_single_instance():
+        sys.exit(0)
     app = BreakReminderApplication()
     app.run()

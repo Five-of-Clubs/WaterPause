@@ -17,3 +17,6 @@ Thumbs.db
 build/
 dist/
 *.spec
+
+# 个人文件
+需求说明_久坐与喝水提醒工具.md
