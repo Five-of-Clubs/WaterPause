@@ -33,9 +33,9 @@ def create_shortcut():
     shortcut.Description = "轻量级桌面防久坐与饮水提醒小工具"
     shortcut.Save()
 
-    print(f"桌面快捷方式已成功生成！")
-    print(f"快捷方式位置: {shortcut_path}")
-    print(f"图标路径: {icon_path}")
+    print("[OK] 桌面快捷方式已成功生成！")
+    print(f"[OK] 快捷方式目标: {shortcut_path}")
+    print(f"[OK] 专属图标路径: {icon_path}")
 
 
 if __name__ == "__main__":
